@@ -1,0 +1,64 @@
+/* GymPact design tokens — Lucario palette */
+/* Import this AFTER figma-theme.css to override with brand values */
+
+:root {
+  /* Brand */
+  --gp-blue:          #6EA4BB;
+  --gp-blue-dark:     #4E8BA3;
+  --gp-blue-tint:     rgba(110, 164, 187, 0.12);
+  --gp-blue-border:   rgba(110, 164, 187, 0.35);
+
+  --gp-gold:          #D4A843;
+  --gp-gold-dark:     #B88E2F;
+  --gp-gold-tint:     rgba(212, 168, 67, 0.12);
+  --gp-gold-border:   rgba(212, 168, 67, 0.35);
+
+  --gp-red:           #C04C4B;
+  --gp-red-tint:      rgba(192, 76, 75, 0.10);
+  --gp-red-border:    rgba(192, 76, 75, 0.30);
+
+  --gp-green:         #5A9E6E;
+  --gp-green-tint:    rgba(90, 158, 110, 0.12);
+  --gp-green-border:  rgba(90, 158, 110, 0.30);
+
+  --gp-warn:          #D4854A;
+  --gp-warn-tint:     rgba(212, 133, 74, 0.12);
+
+  /* Surfaces */
+  --gp-bg:            #FFFFFF;
+  --gp-surface:       #FFFFFF;
+  --gp-surface-2:     #F3F4F8;
+  --gp-surface-3:     #ECEEF5;
+
+  /* Text */
+  --gp-text:          #2A2D35;
+  --gp-text-muted:    #6B7280;
+  --gp-text-faint:    #B0B8C8;
+  --gp-text-inverse:  #FFFFFF;
+
+  /* Dynamic identity (set via JS on login) */
+  --gp-self:          var(--gp-blue);       /* logged-in user */
+  --gp-self-tint:     var(--gp-blue-tint);
+  --gp-self-border:   var(--gp-blue-border);
+  --gp-partner:       var(--gp-gold);       /* partner */
+  --gp-partner-tint:  var(--gp-gold-tint);
+  --gp-partner-border:var(--gp-gold-border);
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 6px;
+  --sp-3: 8px;
+  --sp-4: 12px;
+  --sp-5: 16px;
+  --sp-6: 24px;
+  --sp-7: 32px;
+  --sp-8: 48px;
+
+  /* Radius */
+  --r-xs:   4px;
+  --r-sm:   6px;
+  --r-md:   8px;
+  --r-lg:   12px;
+  --r-xl:   16px;
+  --r-full: 999px;
+}
