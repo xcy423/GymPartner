@@ -1,137 +1,50 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast, Toaster } from 'sonner';
 import { Login } from './components/Login';
-import { Home } from './components/Home';
+import { Home } from './components/HomeScreen';
 import { Rewards } from './components/Rewards';
 import { CalendarScreen } from './components/Calendar';
 import { SettingsScreen } from './components/Settings';
 import { BottomNav } from './components/BottomNav';
+import { INITIAL_USERS, DEMO_SESSIONS } from './data';
+import { getWeekSessions, getMonthSessions, hasSessionToday } from './session-utils';
+import type { TabName, Session, RewardRequest, UserData, ActiveSession } from './types';
+import { db, EMAIL_MAP } from './supabase';
 
-export type TabName = 'home' | 'rewards' | 'calendar' | 'settings';
-
-export interface Session {
+interface DbProfile {
   id: string;
-  userId: string;
-  date: string;
-  checkInTime: string;
-  checkOutTime: string | null;
-  checkInPhoto: string | null;
-  checkOutPhoto: string | null;
-  complete: boolean;
-}
-
-export interface RewardRequest {
-  id: string;
-  requesterId: string;
-  rewardId: string;
-  rewardName: string;
-  rewardEmoji: string;
-  rewardCost: number;
-  status: 'pending' | 'approved';
-  approvedAt?: string;
-}
-
-export interface UserData {
   username: string;
-  password: string;
-  displayName: string;
-  partner: string;
-  approvalCode: string;
-  points: number;
-  multiplier: number;
-  weekStreak: number;
-  weekMode: 'fixed' | 'rolling';
+  display_name: string | null;
+  points: number | null;
+  multiplier: number | null;
+  streak_weeks: number | null;
+  partner_id: string | null;
 }
 
-export interface ActiveSession {
-  checkInTime: string;
-  checkInPhoto: string | null;
+interface DbProfileWithPartner extends DbProfile {
+  partner: DbProfile | DbProfile[] | null;
 }
 
-const INITIAL_USERS: Record<string, UserData> = {
-  codee: {
-    username: 'codee',
-    password: 'gym123',
-    displayName: 'Codee',
-    partner: 'owen',
-    approvalCode: 'love2026',
-    points: 240,
-    multiplier: 1.4,
-    weekStreak: 2,
-    weekMode: 'fixed',
-  },
-  owen: {
-    username: 'owen',
-    password: 'gym456',
-    displayName: 'Owen',
-    partner: 'codee',
-    approvalCode: 'pact2026',
-    points: 180,
-    multiplier: 1.2,
-    weekStreak: 1,
-    weekMode: 'fixed',
-  },
-};
-
-const DEMO_SESSIONS: Session[] = [
-  // codee - Week 2 (June 8–14): 3 sessions → streak 1, multiplier → 1.2
-  { id: 's1', userId: 'codee', date: '2026-06-09', checkInTime: '09:00', checkOutTime: '10:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's2', userId: 'codee', date: '2026-06-11', checkInTime: '08:30', checkOutTime: '10:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's3', userId: 'codee', date: '2026-06-13', checkInTime: '07:00', checkOutTime: '08:45', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // codee - Week 3 (June 15–21): 3 sessions → streak 2, multiplier → 1.4
-  { id: 's4', userId: 'codee', date: '2026-06-16', checkInTime: '09:00', checkOutTime: '10:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's5', userId: 'codee', date: '2026-06-18', checkInTime: '18:00', checkOutTime: null, checkInPhoto: null, checkOutPhoto: null, complete: false },
-  { id: 's6', userId: 'codee', date: '2026-06-20', checkInTime: '08:00', checkOutTime: '09:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // owen - Week 2 (June 8–14): 3 sessions → streak 1, multiplier → 1.2
-  { id: 's7', userId: 'owen', date: '2026-06-10', checkInTime: '10:00', checkOutTime: '11:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's8', userId: 'owen', date: '2026-06-12', checkInTime: '09:00', checkOutTime: '10:15', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's9', userId: 'owen', date: '2026-06-14', checkInTime: '08:30', checkOutTime: '10:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // owen - Week 3 (June 15–21): only 1 session — streak resets
-  { id: 's10', userId: 'owen', date: '2026-06-17', checkInTime: '07:30', checkOutTime: '09:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-];
-
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-export function getWeekSessions(sessions: Session[], userId: string, weekMode: 'fixed' | 'rolling'): number {
-  const today = new Date();
-  let weekStart: Date;
-  if (weekMode === 'rolling') {
-    weekStart = new Date(today);
-    weekStart.setDate(weekStart.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0);
-  } else {
-    weekStart = getMonday(today);
-  }
-  const todayStr = today.toISOString().split('T')[0];
-  const weekStartStr = weekStart.toISOString().split('T')[0];
-  return sessions.filter(
-    (s) => s.userId === userId && s.complete && s.date >= weekStartStr && s.date <= todayStr
-  ).length;
-}
-
-export function getMonthSessions(sessions: Session[], userId: string): number {
-  const today = new Date();
-  const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  return sessions.filter((s) => s.userId === userId && s.complete && s.date.startsWith(monthStr)).length;
-}
-
-export function hasSessionToday(sessions: Session[], userId: string): boolean {
-  const today = new Date().toISOString().split('T')[0];
-  return sessions.some((s) => s.userId === userId && s.date === today);
+function mapProfileToUser(profile: DbProfile, partnerUsername: string): UserData {
+  const defaults = INITIAL_USERS[profile.username];
+  return {
+    username: profile.username,
+    password: defaults?.password ?? '',
+    displayName: profile.display_name ?? defaults?.displayName ?? profile.username,
+    partner: partnerUsername,
+    approvalCode: defaults?.approvalCode ?? '',
+    points: profile.points ?? defaults?.points ?? 0,
+    multiplier: profile.multiplier ?? defaults?.multiplier ?? 1,
+    weekStreak: profile.streak_weeks ?? defaults?.weekStreak ?? 0,
+    weekMode: defaults?.weekMode ?? 'fixed',
+  };
 }
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [authBooting, setAuthBooting] = useState(true);
   const [activeTab, setActiveTab] = useState<TabName>('home');
-  const [viewMode, setViewMode] = useState<'self' | 'partner'>('self');
-  const [users, setUsers] = useState<Record<string, UserData>>(INITIAL_USERS);
+  const [users, setUsers] = useState<Record<string, UserData>>({});
   const [sessions, setSessions] = useState<Session[]>(DEMO_SESSIONS);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [rewardRequests, setRewardRequests] = useState<RewardRequest[]>([]);
@@ -148,24 +61,108 @@ export default function App() {
     return () => clearInterval(id);
   }, [activeSession]);
 
-  const handleLogin = useCallback((username: string, password: string): boolean => {
-    const u = users[username.toLowerCase()];
-    if (!u || u.password !== password) return false;
-    setCurrentUser(u.username);
-    return true;
-  }, [users]);
+  const hydrateUsersFromProfile = useCallback((profile: DbProfileWithPartner, preferredUsername?: string) => {
+    const partnerRaw = Array.isArray(profile.partner) ? profile.partner[0] : profile.partner;
+    if (!partnerRaw || !partnerRaw.username) {
+      throw new Error('Partner profile is missing or not linked.');
+    }
 
-  const handleLogout = useCallback(() => {
+    const primary = mapProfileToUser(profile, partnerRaw.username);
+    const secondary = mapProfileToUser(partnerRaw, primary.username);
+
+    let me = primary;
+    let partner = secondary;
+
+    if (preferredUsername && secondary.username === preferredUsername) {
+      me = secondary;
+      partner = primary;
+    }
+
+    setUsers((prev) => ({ ...prev, [me.username]: me, [partner.username]: partner }));
+    setCurrentUser(preferredUsername ?? me.username);
+    return me;
+  }, []);
+
+  const loadProfileFromUserId = useCallback(async (userId: string, preferredUsername?: string) => {
+    const { data, error } = await db
+      .from('profiles')
+      .select('id, username, display_name, points, multiplier, streak_weeks, partner_id, partner:partner_id(id, username, display_name, points, multiplier, streak_weeks, partner_id)')
+      .eq('id', userId)
+      .single();
+
+    if (error || !data) {
+      throw new Error(error?.message ?? 'Profile could not be loaded.');
+    }
+
+    return hydrateUsersFromProfile(data as DbProfileWithPartner, preferredUsername);
+  }, [hydrateUsersFromProfile]);
+
+  const handleLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
+    const email = EMAIL_MAP[username.toLowerCase()];
+    if (!email) {
+      toast.error('Unknown username.');
+      return false;
+    }
+
+    const { data, error } = await db.auth.signInWithPassword({ email, password });
+    if (error || !data.user) {
+      toast.error('Wrong password.');
+      return false;
+    }
+
+    try {
+      const me = await loadProfileFromUserId(data.user.id, username.toLowerCase());
+      toast.success(`Welcome back, ${me.displayName}!`);
+      return true;
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Could not load your profile.');
+      return false;
+    }
+  }, [loadProfileFromUserId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const restore = async () => {
+      const { data } = await db.auth.getSession();
+      const userId = data.session?.user?.id;
+      const email = data.session?.user?.email;
+      const restoredUsername = email
+        ? Object.entries(EMAIL_MAP).find(([, mapped]) => mapped.toLowerCase() === email.toLowerCase())?.[0]
+        : undefined;
+
+      if (!userId) {
+        if (mounted) setAuthBooting(false);
+        return;
+      }
+
+      try {
+        await loadProfileFromUserId(userId, restoredUsername);
+      } catch {
+        await db.auth.signOut();
+      } finally {
+        if (mounted) setAuthBooting(false);
+      }
+    };
+
+    restore();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadProfileFromUserId]);
+
+  const handleLogout = useCallback(async () => {
+    await db.auth.signOut();
     setCurrentUser(null);
     setActiveTab('home');
-    setViewMode('self');
     setActiveSession(null);
   }, []);
 
   const handleCheckIn = useCallback((photo: string | null) => {
     if (!currentUser) return;
     setActiveSession({ checkInTime: new Date().toISOString(), checkInPhoto: photo });
-    toast.success('📸 Checked in! Let\'s go 💪');
+    toast.success('Checked in. Let\'s go.');
   }, [currentUser]);
 
   const handleCheckOut = useCallback((photo: string | null) => {
@@ -193,16 +190,16 @@ export default function App() {
     const user = users[currentUser];
     const weekCount = getWeekSessions(newSessions, currentUser, user.weekMode);
     let pts = 0;
-    let msg = '✅ Session complete!';
+    let msg = 'Session complete.';
 
     if (weekCount === 3) {
       pts = Math.round(100 * user.multiplier);
-      msg = `🎯 3 sessions this week! +${pts} pts earned!`;
+      msg = `3 sessions this week. +${pts} points earned.`;
     } else if (weekCount === 5) {
       pts = Math.round(150 * user.multiplier);
-      msg = `⭐ 5 sessions this week! Bonus +${pts} pts!`;
+      msg = `5 sessions this week. Bonus +${pts} points.`;
     } else if (weekCount < 3) {
-      msg = `✅ Session done! ${3 - weekCount} more to earn points this week!`;
+      msg = `Session saved. ${3 - weekCount} more this week to earn points.`;
     }
 
     if (pts > 0) {
@@ -214,16 +211,24 @@ export default function App() {
     toast.success(msg);
   }, [currentUser, activeSession, sessions, users]);
 
-  const handleRequestReward = useCallback((rewardId: string, rewardName: string, rewardEmoji: string, rewardCost: number) => {
+  const handleRequestReward = useCallback((rewardId: string, rewardName: string, rewardCost: number) => {
     if (!currentUser) return;
     const exists = rewardRequests.find((r) => r.requesterId === currentUser && r.rewardId === rewardId && r.status === 'pending');
     if (exists) { toast.info('Already requested — waiting for approval!'); return; }
     setRewardRequests((prev) => [
       ...prev,
-      { id: Date.now().toString(), requesterId: currentUser, rewardId, rewardName, rewardEmoji, rewardCost, status: 'pending' },
+      {
+        id: Date.now().toString(),
+        requesterId: currentUser,
+        rewardId,
+        rewardName,
+        rewardCost,
+        status: 'pending',
+        requestedAt: new Date().toISOString(),
+      },
     ]);
     const partnerName = users[users[currentUser].partner].displayName;
-    toast.success(`✨ Reward requested! Waiting for ${partnerName} to approve.`);
+    toast.success(`Reward requested. Waiting for ${partnerName} to approve.`);
   }, [currentUser, rewardRequests, users]);
 
   const handleApproveReward = useCallback((requestId: string, approvalCode: string): boolean => {
@@ -231,7 +236,7 @@ export default function App() {
     const req = rewardRequests.find((r) => r.id === requestId);
     if (!req) return false;
     if (users[currentUser].approvalCode !== approvalCode) {
-      toast.error('❌ Wrong approval code. Try again.');
+      toast.error('Wrong approval code. Try again.');
       return false;
     }
     setUsers((prev) => ({
@@ -241,17 +246,36 @@ export default function App() {
     setRewardRequests((prev) =>
       prev.map((r) => r.id === requestId ? { ...r, status: 'approved', approvedAt: new Date().toISOString() } : r)
     );
-    toast.success(`✅ ${req.rewardEmoji} ${req.rewardName} approved and redeemed!`);
+    toast.success(`${req.rewardName} approved and redeemed.`);
     return true;
   }, [currentUser, rewardRequests, users]);
+
+  const handleUseCoupon = useCallback((requestId: string): boolean => {
+    if (!currentUser) return false;
+    const req = rewardRequests.find((r) => r.id === requestId && r.requesterId === currentUser);
+    if (!req || req.status !== 'approved') return false;
+    setRewardRequests((prev) =>
+      prev.map((r) => r.id === requestId ? { ...r, status: 'used', usedAt: new Date().toISOString() } : r)
+    );
+    toast.success(`${req.rewardName} coupon used.`);
+    return true;
+  }, [currentUser, rewardRequests]);
 
   const handleSaveSettings = useCallback((displayName: string, weekMode: 'fixed' | 'rolling', approvalCode: string) => {
     if (!currentUser) return;
     setUsers((prev) => ({ ...prev, [currentUser]: { ...prev[currentUser], displayName, weekMode, approvalCode } }));
-    toast.success('✅ Settings saved!');
+    toast.success('Settings saved.');
   }, [currentUser]);
 
-  if (!currentUser) {
+  if (authBooting) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#F8F8FB', fontFamily: "'Inter', sans-serif" }}>
+        <Toaster position="top-center" richColors />
+      </div>
+    );
+  }
+
+  if (!currentUser || !users[currentUser]) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F8F8FB', fontFamily: "'Inter', sans-serif" }}>
         <Login onLogin={handleLogin} />
@@ -261,11 +285,21 @@ export default function App() {
   }
 
   const user = users[currentUser];
-  const viewUserId = viewMode === 'partner' ? user.partner : currentUser;
-  const viewUser = users[viewUserId];
-  const weekSessions = getWeekSessions(sessions, viewUserId, viewUser.weekMode);
-  const monthSessions = getMonthSessions(sessions, viewUserId);
-  const todaySession = hasSessionToday(sessions, viewUserId);
+  const partnerUser = users[user.partner];
+  if (!partnerUser) {
+    return (
+      <div className="min-h-screen" style={{ backgroundColor: '#F8F8FB', fontFamily: "'Inter', sans-serif" }}>
+        <Toaster position="top-center" richColors />
+      </div>
+    );
+  }
+
+  const selfWeekSessions = getWeekSessions(sessions, currentUser, user.weekMode);
+  const partnerWeekSessions = getWeekSessions(sessions, partnerUser.username, partnerUser.weekMode);
+  const selfMonthSessions = getMonthSessions(sessions, currentUser);
+  const partnerMonthSessions = getMonthSessions(sessions, partnerUser.username);
+  const selfTodaySession = hasSessionToday(sessions, currentUser);
+  const partnerTodaySession = hasSessionToday(sessions, partnerUser.username);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif" }}>
@@ -273,14 +307,16 @@ export default function App() {
         {activeTab === 'home' && (
           <Home
             currentUser={user}
-            viewUser={viewUser}
-            viewMode={viewMode}
+            partnerUser={partnerUser}
             sessions={sessions}
             activeSession={activeSession}
             timerMin={timerMin}
-            weekSessions={weekSessions}
-            monthSessions={monthSessions}
-            sessionToday={todaySession}
+            selfWeekSessions={selfWeekSessions}
+            partnerWeekSessions={partnerWeekSessions}
+            selfMonthSessions={selfMonthSessions}
+            partnerMonthSessions={partnerMonthSessions}
+            selfSessionToday={selfTodaySession}
+            partnerSessionToday={partnerTodaySession}
             onCheckIn={handleCheckIn}
             onCheckOut={handleCheckOut}
           />
@@ -288,21 +324,19 @@ export default function App() {
         {activeTab === 'rewards' && (
           <Rewards
             currentUser={user}
-            partnerUser={users[user.partner]}
+            partnerUser={partnerUser}
             rewardRequests={rewardRequests}
-            viewMode={viewMode}
             onRequestReward={handleRequestReward}
             onApproveReward={handleApproveReward}
+            onUseCoupon={handleUseCoupon}
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarScreen sessions={sessions} userId={viewUserId} viewUser={viewUser} />
+          <CalendarScreen sessions={sessions} currentUser={user} partnerUser={partnerUser} />
         )}
         {activeTab === 'settings' && (
           <SettingsScreen
             user={user}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
             onSaveSettings={handleSaveSettings}
             onLogout={handleLogout}
           />

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Dumbbell, Sparkles } from 'lucide-react';
 
 const C = {
   primary: '#6EA4BB',
@@ -13,20 +14,24 @@ const C = {
 };
 
 interface Props {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 export function Login({ onLogin }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userFocus, setUserFocus] = useState(false);
   const [passFocus, setPassFocus] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
-    const ok = onLogin(username.trim(), password);
+    setIsSubmitting(true);
+    const ok = await onLogin(username.trim(), password);
+    setIsSubmitting(false);
     if (!ok) setError('Invalid username or password. Try again.');
   };
 
@@ -59,16 +64,18 @@ export function Login({ onLogin }: Props) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '26px',
             marginBottom: '12px',
           }}>
-            🏋️
+            <Dumbbell size={24} color={C.primaryDark} />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em', marginBottom: '4px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em', marginBottom: '4px' }}>
             GymPact
           </div>
           <div style={{ fontSize: '14px', color: C.textMuted, textAlign: 'center' }}>
-            Your private gym accountability & rewards app ✨
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              Your private gym accountability and rewards app
+              <Sparkles size={14} color={C.gold} />
+            </span>
           </div>
         </div>
 
@@ -91,6 +98,7 @@ export function Login({ onLogin }: Props) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="codee or owen"
+              disabled={isSubmitting}
               onFocus={() => setUserFocus(true)}
               onBlur={() => setUserFocus(false)}
               autoComplete="username"
@@ -129,6 +137,7 @@ export function Login({ onLogin }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Your password"
+              disabled={isSubmitting}
               onFocus={() => setPassFocus(true)}
               onBlur={() => setPassFocus(false)}
               autoComplete="current-password"
@@ -165,6 +174,7 @@ export function Login({ onLogin }: Props) {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             style={{
               width: '100%',
               height: '50px',
@@ -174,31 +184,18 @@ export function Login({ onLogin }: Props) {
               color: '#FFFFFF',
               fontSize: '15px',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: isSubmitting ? 'wait' : 'pointer',
               letterSpacing: '0.01em',
               transition: 'opacity 0.15s, transform 0.1s',
               boxShadow: `0 4px 16px rgba(110,164,187,0.40)`,
+              opacity: isSubmitting ? 0.75 : 1,
             }}
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
-            Sign in →
+            {isSubmitting ? 'Signing in...' : 'Sign in →'}
           </button>
         </form>
-
-        {/* Demo hint */}
-        <div style={{
-          marginTop: '16px',
-          padding: '10px 14px',
-          borderRadius: '8px',
-          background: C.primaryTint,
-          border: `1px solid ${C.primaryBorder}`,
-          textAlign: 'center',
-          fontSize: '12px',
-          color: C.textMuted,
-        }}>
-          Demo: <strong>codee</strong> / gym123 &nbsp;·&nbsp; <strong>owen</strong> / gym456
-        </div>
       </div>
     </div>
   );

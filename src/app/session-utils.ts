@@ -1,0 +1,42 @@
+import type { Session, UserData } from './types';
+
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+export function getWeekSessions(
+  sessions: Session[],
+  userId: string,
+  weekMode: UserData['weekMode']
+): number {
+  const today = new Date();
+  let weekStart: Date;
+  if (weekMode === 'rolling') {
+    weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+  } else {
+    weekStart = getMonday(today);
+  }
+  const todayStr = today.toISOString().split('T')[0];
+  const weekStartStr = weekStart.toISOString().split('T')[0];
+  return sessions.filter(
+    (s) => s.userId === userId && s.complete && s.date >= weekStartStr && s.date <= todayStr
+  ).length;
+}
+
+export function getMonthSessions(sessions: Session[], userId: string): number {
+  const today = new Date();
+  const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  return sessions.filter((s) => s.userId === userId && s.complete && s.date.startsWith(monthStr)).length;
+}
+
+export function hasSessionToday(sessions: Session[], userId: string): boolean {
+  const today = new Date().toISOString().split('T')[0];
+  return sessions.some((s) => s.userId === userId && s.date === today);
+}
