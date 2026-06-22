@@ -1,0 +1,690 @@
+import os
+os.makedirs(os.path.expanduser('~/output'), exist_ok=True)
+
+ds = '''# GymPact — Figma-Ready Design System
+*Lucario Pokémon Palette · Version 2.0*
+*Copy each block directly into Figma Variables or Styles*
+
+---
+
+## HOW TO USE IN FIGMA
+
+1. Open Figma → your file → **Local Variables** (right panel)
+2. Create a Collection called **GymPact Tokens**
+3. Add groups matching each section below
+4. For **Color Styles**: Figma → Assets panel → "+" → paste hex values
+5. For **Text Styles**: Figma → Assets panel → Text Styles → "+"
+6. For **Effect Styles** (shadows): same panel → Effect Styles
+
+---
+
+## 1. COLOR VARIABLES
+
+### Group: Brand / Palette
+Paste these as your raw brand source colors first.
+
+```
+Brand/Blue          #6EA4BB    Air Superiority Blue
+Brand/Platinum      #E7E7E6    Platinum
+Brand/Space         #464646    Outer Space
+Brand/Red           #C04C4B    Bittersweet Shimmer
+Brand/Gold          #F0DBA5    Deep Champagne
+```
+
+---
+
+### Group: Semantic / Light (Mode = Light)
+
+```
+Semantic/Background         #FFFFFF
+Semantic/Background-Soft    #F8F8FB
+Semantic/Surface            #FFFFFF
+Semantic/Surface-2          #F3F4F8
+Semantic/Surface-3          #ECEEF5
+Semantic/Border             #6EA4BB  opacity 20%
+Semantic/Divider            #6EA4BB  opacity 12%
+
+Semantic/Text               #2A2D35
+Semantic/Text-Muted         #6B7280
+Semantic/Text-Faint         #B0B8C8
+Semantic/Text-Inverse       #FFFFFF
+
+Semantic/Primary            #6EA4BB
+Semantic/Primary-Dark       #4E8BA3
+Semantic/Primary-HL         #6EA4BB  opacity 12%
+Semantic/Primary-Border     #6EA4BB  opacity 35%
+
+Semantic/Gold               #D4A843
+Semantic/Gold-Dark          #B88E2F
+Semantic/Gold-HL            #D4A843  opacity 12%
+Semantic/Gold-Border        #D4A843  opacity 35%
+
+Semantic/Red                #C04C4B
+Semantic/Red-HL             #C04C4B  opacity 10%
+Semantic/Red-Border         #C04C4B  opacity 30%
+
+Semantic/Green              #5A9E6E
+Semantic/Green-HL           #5A9E6E  opacity 12%
+Semantic/Green-Border       #5A9E6E  opacity 30%
+
+Semantic/Warn               #D4854A
+Semantic/Warn-HL            #D4854A  opacity 12%
+```
+
+---
+
+### Group: Semantic / Dark (Mode = Dark)
+
+```
+Semantic/Background         #16181D
+Semantic/Background-Soft    #1C1F26
+Semantic/Surface            #1E2129
+Semantic/Surface-2          #242830
+Semantic/Surface-3          #2A2F3A
+Semantic/Border             #6EA4BB  opacity 16%
+Semantic/Divider            #6EA4BB  opacity 8%
+
+Semantic/Text               #E8EAF0
+Semantic/Text-Muted         #E8EAF0  opacity 55%
+Semantic/Text-Faint         #E8EAF0  opacity 25%
+Semantic/Text-Inverse       #16181D
+
+Semantic/Primary            #6EA4BB
+Semantic/Primary-Dark       #5590A8
+Semantic/Primary-HL         #6EA4BB  opacity 13%
+Semantic/Primary-Border     #6EA4BB  opacity 30%
+
+Semantic/Gold               #F0DBA5
+Semantic/Gold-Dark          #D4C080
+Semantic/Gold-HL            #F0DBA5  opacity 13%
+Semantic/Gold-Border        #F0DBA5  opacity 30%
+
+Semantic/Red                #C04C4B
+Semantic/Red-HL             #C04C4B  opacity 13%
+Semantic/Red-Border         #C04C4B  opacity 30%
+
+Semantic/Green              #7AC47A
+Semantic/Green-HL           #7AC47A  opacity 13%
+Semantic/Green-Border       #7AC47A  opacity 30%
+
+Semantic/Warn               #D4854A
+Semantic/Warn-HL            #D4854A  opacity 13%
+```
+
+---
+
+## 2. SPACING VARIABLES
+
+Create a **Number** variable group called **Spacing**.
+
+```
+Spacing/1    4
+Spacing/2    6
+Spacing/3    8
+Spacing/4    12
+Spacing/5    16
+Spacing/6    24
+Spacing/7    32
+Spacing/8    48
+```
+
+### Usage reference
+
+| Token      | px  | When to use                              |
+|------------|-----|------------------------------------------|
+| Spacing/1  | 4   | Icon-to-label gap, dot separators        |
+| Spacing/2  | 6   | Chip inline padding, badge padding       |
+| Spacing/3  | 8   | List item gap, tight inner spacing       |
+| Spacing/4  | 12  | Label-to-input, default form gap         |
+| Spacing/5  | 16  | Card body padding, section item gap      |
+| Spacing/6  | 24  | Section gap, hero inner padding          |
+| Spacing/7  | 32  | Between major screen sections            |
+| Spacing/8  | 48  | Hero top/bottom, screen breathing room   |
+
+---
+
+## 3. BORDER RADIUS VARIABLES
+
+Create a **Number** variable group called **Radius**.
+
+```
+Radius/XS      4
+Radius/SM      6
+Radius/MD      8
+Radius/LG      12
+Radius/XL      16
+Radius/Full    999
+```
+
+### Usage reference
+
+| Token       | px   | When to use                            |
+|-------------|------|----------------------------------------|
+| Radius/XS   | 4    | Tags, tiny badges, tooltips            |
+| Radius/SM   | 6    | Buttons, text inputs, small cards      |
+| Radius/MD   | 8    | Default cards, step cards, modals      |
+| Radius/LG   | 12   | Hero card, bottom sheet header         |
+| Radius/XL   | 16   | Auth card, floating bottom nav         |
+| Radius/Full | 999  | Pills, avatars, progress bars          |
+
+---
+
+## 4. TEXT STYLES
+
+Create these as **Local Text Styles** in Figma.
+Font: **Inter**. Set line height as "Auto" unless specified.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Style Name          Size   Weight   Letter   Line       │
+│                     (px)            Spacing  Height     │
+├─────────────────────────────────────────────────────────┤
+│ Text/XS-Regular     12     400      +4%      Auto       │
+│ Text/XS-Medium      12     500      +4%      Auto       │
+│ Text/XS-Bold        12     700      +5%      Auto       │
+│                                                         │
+│ Text/SM-Regular     14     400       0       Auto       │
+│ Text/SM-Medium      14     500       0       Auto       │
+│ Text/SM-Bold        14     700       0       Auto       │
+│                                                         │
+│ Text/Base-Regular   16     400       0       Auto       │
+│ Text/Base-Medium    16     500       0       Auto       │
+│                                                         │
+│ Text/LG-Bold        20     800      -3%      Auto       │
+│ Text/LG-Black       20     900      -4%      Auto       │
+│                                                         │
+│ Text/XL-Black       28     900      -5%      105%       │
+│ Text/Hero           36     900      -5%      100%       │
+│                                                         │
+│ Label/Eyebrow       11     700      +6%      Auto       │
+│   (all-caps, letter-spacing 0.06em)                     │
+└─────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 5. EFFECT STYLES (Shadows)
+
+Create these as **Local Effect Styles**.
+
+```
+Shadow/SM
+  Type:   Drop Shadow
+  X: 0    Y: 1    Blur: 4    Spread: 0
+  Color:  #6EA4BB  opacity 12%
+  + inner glow:
+  X: 0    Y: 0    Blur: 0    Spread: 1
+  Color:  #6EA4BB  opacity 6%
+
+Shadow/MD
+  Type:   Drop Shadow
+  X: 0    Y: 4    Blur: 16   Spread: 0
+  Color:  #6EA4BB  opacity 14%
+  + inner ring:
+  X: 0    Y: 0    Blur: 0    Spread: 1
+  Color:  #6EA4BB  opacity 7%
+
+Shadow/LG
+  Type:   Drop Shadow
+  X: 0    Y: 8    Blur: 32   Spread: 0
+  Color:  #6EA4BB  opacity 18%
+  + inner ring:
+  X: 0    Y: 0    Blur: 0    Spread: 1
+  Color:  #6EA4BB  opacity 8%
+```
+
+---
+
+## 6. COMPONENT SPECS
+
+### 6.1 Button — Primary
+
+```
+Height:           48px
+Padding inline:   16px  (Spacing/5)
+Border radius:    6px   (Radius/SM)
+Background:       Semantic/Primary
+Text color:       Semantic/Text-Inverse
+Text style:       Text/SM-Bold
+Shadow:           Shadow/MD (blue tint at 30%)
+
+Hover state:
+  Background:     Semantic/Primary-Dark
+
+Pressed state:
+  Transform:      scale(0.97)
+
+Disabled state:
+  Opacity:        40%
+  Pointer:        not-allowed
+```
+
+### 6.2 Button — Secondary
+
+```
+Height:           44px
+Padding inline:   14px  (Spacing/4 + 2)
+Border radius:    6px   (Radius/SM)
+Background:       Semantic/Surface-2
+Text color:       Semantic/Text
+Text style:       Text/SM-Bold
+Border:           1.5px  Semantic/Border
+```
+
+### 6.3 Button — Ghost
+
+```
+Height:           44px
+Padding inline:   14px
+Border radius:    6px   (Radius/SM)
+Background:       transparent
+Text color:       Semantic/Primary
+Text style:       Text/SM-Bold
+Border:           1.5px dashed  Semantic/Primary-Border
+```
+
+### 6.4 Button — Gold (Reward)
+
+```
+Height:           44px
+Padding inline:   14px
+Border radius:    6px   (Radius/SM)
+Background:       Semantic/Gold-HL
+Text color:       Semantic/Gold-Dark
+Text style:       Text/SM-Bold
+Border:           1.5px  Semantic/Gold-Border
+```
+
+### 6.5 Button — Danger
+
+```
+Height:           44px
+Padding inline:   14px
+Border radius:    6px   (Radius/SM)
+Background:       Semantic/Red-HL
+Text color:       Semantic/Red
+Text style:       Text/SM-Bold
+Border:           1.5px  Semantic/Red-Border
+```
+
+---
+
+### 6.6 Input Field
+
+```
+Height:           50px
+Padding:          12px 14px  (Spacing/4 + 2)
+Border radius:    6px  (Radius/SM)
+Background:       Semantic/Surface-2
+Text color:       Semantic/Text
+Text style:       Text/SM-Regular
+Border:           1.5px  Semantic/Border
+
+Focus state:
+  Border:         1.5px  Semantic/Primary
+  Shadow:         0 0 0 4px  Semantic/Primary-HL
+
+Placeholder:
+  Color:          Semantic/Text-Faint
+```
+
+---
+
+### 6.7 Cards
+
+```
+Default Card
+  Padding:        16px   (Spacing/5)
+  Border radius:  8px    (Radius/MD)
+  Background:     Semantic/Surface
+  Border:         1px    Semantic/Border
+  Shadow:         Shadow/SM
+
+Hero Card
+  Padding:        24px   (Spacing/6)
+  Border radius:  12px   (Radius/LG)
+  Background:     gradient — Primary-HL 8% → Surface
+  Border:         1px    Semantic/Primary-Border
+  Shadow:         Shadow/MD
+
+Step Card (inactive)
+  Padding:        16px   (Spacing/5)
+  Border radius:  8px    (Radius/MD)
+  Background:     Semantic/Surface-2
+  Border:         1.5px  Semantic/Border
+
+Step Card (active)
+  Background:     Primary tint 5% over Surface
+  Border:         1.5px  Semantic/Primary-Border
+
+Auth Card
+  Padding:        32px   (Spacing/7)
+  Border radius:  16px   (Radius/XL)
+  Background:     Semantic/Surface
+  Border:         1px    Semantic/Border
+  Shadow:         Shadow/LG
+
+Reward Card (locked)
+  Same as Default Card
+
+Reward Card (unlocked)
+  Border:         1px    Semantic/Gold-Border
+  Background:     gradient — Gold-HL → Surface
+```
+
+---
+
+### 6.8 Status Chips / Pills
+
+```
+Padding:          4px 8px   (Spacing/1 + Spacing/3)
+Border radius:    999px     (Radius/Full)
+Text style:       Text/XS-Bold
+Gap (icon+text):  4px       (Spacing/1)
+
+Variants:
+  Blue:    bg Semantic/Primary-HL   text Semantic/Primary-Dark
+  Green:   bg Semantic/Green-HL     text Semantic/Green
+  Gold:    bg Semantic/Gold-HL      text Semantic/Gold-Dark
+  Red:     bg Semantic/Red-HL       text Semantic/Red
+  Warn:    bg Semantic/Warn-HL      text Semantic/Warn
+  Neutral: bg Semantic/Surface-2    text Semantic/Text-Muted
+```
+
+---
+
+### 6.9 Progress Bar
+
+```
+Track
+  Height:         6px
+  Border radius:  999px  (Radius/Full)
+  Background:     Semantic/Surface-3
+
+Fill — Session
+  Background:     Semantic/Primary
+
+Fill — Reward
+  Background:     gradient  Gold-Dark → Gold
+
+Fill — Timer (in-session countdown)
+  Background:     gradient  Primary → Green
+
+Fill — Streak
+  Background:     Semantic/Green
+```
+
+---
+
+### 6.10 Bottom Navigation (floating pill)
+
+```
+Container
+  Border radius:  16px   (Radius/XL)
+  Padding:        6px    (Spacing/2)
+  Background:     Surface  88% opacity
+  Backdrop:       blur 20px
+  Border:         1px    Semantic/Border
+  Shadow:         Shadow/LG
+  Position:       fixed bottom 16px
+
+Nav Item
+  Min height:     52px
+  Border radius:  12px   (Radius/LG)
+  Layout:         column, centered, gap 3px
+  Icon size:      20px
+  Label style:    Text/XS-Bold  all-caps  letter-spacing +4%
+  Color (rest):   Semantic/Text-Faint
+
+Nav Item (active)
+  Background:     Semantic/Primary-HL
+  Color:          Semantic/Primary
+```
+
+---
+
+### 6.11 Topbar
+
+```
+Height:           56px
+Padding:          12px 16px  (Spacing/4 Spacing/5)
+Background:       Background  80% opacity
+Backdrop:         blur 18px
+Border bottom:    1px  Semantic/Divider
+Position:         sticky top 0
+
+Logo mark
+  Size:           34×34px
+  Border radius:  8px   (Radius/MD)
+  Background:     gradient Primary-HL → Gold-HL
+  Border:         1px   Semantic/Primary-Border
+
+Icon button
+  Size:           36×36px
+  Border radius:  999px  (Radius/Full)
+  Background:     Semantic/Surface-2
+  Border:         1px    Semantic/Border
+  Icon color:     Semantic/Text-Muted
+```
+
+---
+
+### 6.12 Calendar Day
+
+```
+Size:             aspect-ratio 1:1 in a 7-column grid
+Border radius:    8px  (Radius/MD)
+Background:       Semantic/Surface-2
+Border:           1px transparent
+
+Empty day
+  Background:     transparent
+  Border:         none
+
+Partial day
+  Background:     Semantic/Warn-HL
+  Border:         1px  rgba(Warn 25%)
+  Text color:     Semantic/Warn
+
+Complete day
+  Background:     Semantic/Green-HL
+  Border:         1px  Semantic/Green-Border
+  Text color:     Semantic/Green
+
+Today overlay
+  Inner ring:     1.5px dashed  Semantic/Primary-Border
+  Inset:          3px from edges
+  Border radius:  5px
+```
+
+---
+
+### 6.13 Multiplier Ladder Bubble
+
+```
+Size:             40×40px
+Border radius:    8px   (Radius/MD)
+Text style:       Text/XS-Bold
+
+State — future
+  Background:     Semantic/Surface
+  Border:         1.5px  Semantic/Border
+  Color:          Semantic/Text-Faint
+
+State — done (past week)
+  Background:     Semantic/Green-HL
+  Border:         1.5px  Semantic/Green-Border
+  Color:          Semantic/Green
+
+State — current (this week)
+  Background:     Semantic/Primary-HL
+  Border:         1.5px  Semantic/Primary-Border
+  Color:          Semantic/Primary
+  Scale:          1.12x
+  Shadow:         0 2px 12px  Primary 25%
+
+State — cap (×3.0)
+  Background:     Semantic/Gold-HL
+  Border:         1.5px  Semantic/Gold-Border
+  Color:          Semantic/Gold-Dark
+```
+
+---
+
+## 7. LAYOUT GRID
+
+```
+Mobile (default)
+  Width:          440px max
+  Columns:        4
+  Margin:         16px  (Spacing/5)
+  Gutter:         12px  (Spacing/4)
+
+Card grid (2-col stats)
+  Columns:        2
+  Gap:            12px  (Spacing/4)
+
+Calendar grid
+  Columns:        7
+  Gap:            8px   (Spacing/3)
+
+Bottom nav grid
+  Columns:        4
+  Gap:            6px   (Spacing/2)
+  Padding:        6px   (Spacing/2)
+```
+
+---
+
+## 8. MOTION & TRANSITION
+
+```
+Easing:     cubic-bezier(0.16, 1, 0.3, 1)   // spring-like, snappy
+Duration:   160ms  — micro interactions (button press, chip toggle)
+            240ms  — card reveal, step card show/hide
+            600ms  — progress bar fill animation
+            1000ms — timer bar smooth update
+
+Hover rule: all hover states use the same easing, 160ms
+Press rule: transform scale(0.97) on :active
+```
+
+---
+
+## 9. ACCOUNT MODEL
+
+```
+codee
+  Password:       gym123
+  Partner:        owen
+  Approval code:  love2026
+  Role:           user + can approve owen's rewards
+
+owen
+  Password:       gym456
+  Partner:        codee
+  Approval code:  pact2026
+  Role:           user + can approve codee's rewards
+```
+
+### Settings toggle states
+
+```
+Mode: My Progress
+  Show:    own sessions, own streak, own rewards, own calendar
+  Actions: log sessions, request rewards, approve partner's rewards
+
+Mode: Partner View
+  Show:    partner's streak, weekly bar, calendar, session history
+  Hide:    session upload flow
+  Actions: approve partner's rewards (from Rewards tab)
+```
+
+---
+
+## 10. REWARD FLOW
+
+```
+Step 1: User earns enough points
+         → "Request this reward" button becomes active (gold state)
+
+Step 2: User taps request
+         → reward status = pending
+         → toast confirmation shown
+
+Step 3: Partner opens Rewards tab
+         → approval card appears with pending reward info
+         → partner enters their approval code
+
+Step 4: Code correct
+         → reward status = approved → redeemed
+         → points deducted immediately
+         → success toast shown to both
+
+Step 5: Code wrong
+         → error toast
+         → approval card stays open
+
+Reward states:
+  locked       — not enough points, progress bar shown
+  unlocked     — enough points, request button active
+  pending      — requested, awaiting partner approval
+  redeemed     — approved and deducted
+```
+
+---
+
+## 11. STREAK & POINTS LOGIC
+
+```
+Weekly sessions → Points earned
+
+< 3 sessions          0 pts
+3 sessions (goal)     100 pts × current multiplier
+4 sessions            100 pts × multiplier (same tier)
+5 sessions (bonus)    250 pts × multiplier
+  (extra 150 pts on top of 100 already earned)
+
+Points awarded:       IMMEDIATELY when 3rd or 5th session completes
+
+Multiplier rules:
+  Start:              ×1.0
+  Each success week:  +0.2
+  Cap:                ×3.0 (after week 11)
+  Missed week:        Reset to ×1.0 (points NOT lost)
+
+Successful week =     3+ complete sessions in the chosen window
+```
+
+---
+
+## 12. SESSION VALIDATION
+
+```
+Check-in:       Upload photo → tap "Check in now"
+                Starts the session timer
+
+Check-out:      Available ONLY after check-in
+                Upload photo → tap "Complete session"
+
+Minimum time:   60 minutes between check-in and check-out
+Maximum time:   5 hours (prompt confirmation beyond this)
+
+Valid session:  Both photos uploaded + 60 min minimum met
+
+Timer bar:      Shows progress from 0 → 60 min after check-in
+                Fills from Primary blue → Green on completion
+
+Retroactive:    Max 1 day back (v1 — could expand later)
+```
+
+---
+
+*GymPact Design System v2.0 — Figma-ready · June 2026*
+*Lucario (Pokémon) color palette by SchemeColor.com*
+'''
+
+path = os.path.expanduser('~/output/GymPact-Design-System-Figma.md')
+with open(path, 'w', encoding='utf-8') as f:
+    f.write(ds)
+print(f"Written {len(ds):,} chars → {path}")
