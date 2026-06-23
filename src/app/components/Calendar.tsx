@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import type { Session, UserData } from '../App';
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Heart, X } from 'lucide-react';
+import type { Session, UserData } from '../types';
+import { PageHeader } from './PageHeader';
 
 const C = {
   primary: '#6EA4BB',
@@ -25,8 +27,12 @@ const MONTH_NAMES = ['January','February','March','April','May','June','July','A
 
 interface Props {
   sessions: Session[];
-  userId: string;
-  viewUser: UserData;
+  currentUser: UserData;
+  partnerUser: UserData;
+}
+
+function ownerId(user: UserData): string {
+  return user.id ?? user.username;
 }
 
 function getDaysInMonth(year: number, month: number): number {
@@ -38,10 +44,63 @@ function getFirstDayOfMonth(year: number, month: number): number {
   return day === 0 ? 6 : day - 1; // 0=Mon...6=Sun
 }
 
-export function CalendarScreen({ sessions, userId, viewUser }: Props) {
+function BothGymBadge() {
+  return (
+    <span
+      style={{
+        width: '12px',
+        height: '12px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        lineHeight: 0,
+      }}
+      aria-label="Both went gym"
+      title="Both went gym"
+    >
+      <Heart size={20} color="#A84D4B" fill="#F1C7C6" strokeWidth={1} />
+    </span>
+  );
+}
+
+function BothGymDayCell({ day }: { day: number }) {
+  return (
+    <span
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        position: 'relative',
+      }}
+      aria-label="Both went gym"
+      title="Both went gym"
+    >
+      <Heart size={44} color="#A84D4B" fill="#F1C7C6" strokeWidth={1} style={{ width: '88%', height: '88%' }} />
+      <span
+        style={{
+          position: 'absolute',
+          fontSize: '12px',
+          lineHeight: '18px',
+          fontWeight: 700,
+          color: '#C04C4B',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -42%)',
+        }}
+      >
+        {day}
+      </span>
+    </span>
+  );
+}
+
+export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth());
+  const [historyFilter, setHistoryFilter] = useState<'self' | 'partner'>('self');
   const [lightbox, setLightbox] = useState<string | null>(null);
 
   const todayStr = today.toISOString().split('T')[0];
@@ -50,7 +109,7 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
 
   const sessionsByDate: Record<string, Session[]> = {};
   sessions.forEach((s) => {
-    if (s.userId === userId) {
+    if (s.userId === ownerId(currentUser) || s.userId === ownerId(partnerUser)) {
       if (!sessionsByDate[s.date]) sessionsByDate[s.date] = [];
       sessionsByDate[s.date].push(s);
     }
@@ -83,26 +142,41 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
 
   const monthSessions = sessions.filter((s) => {
     const mStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-    return s.userId === userId && s.date.startsWith(mStr);
+    const inMonth = s.date.startsWith(mStr);
+    if (!inMonth) return false;
+    return historyFilter === 'self' ? s.userId === ownerId(currentUser) : s.userId === ownerId(partnerUser);
   }).sort((a, b) => b.date.localeCompare(a.date));
+
+  const personPillStyle = (active: boolean, color: string, isLeft: boolean): React.CSSProperties => ({
+    height: '23px',
+    minWidth: '52px',
+    borderRadius: '999px',
+    border: 'none',
+    background: active
+      ? 'linear-gradient(90deg, rgba(110, 164, 187, 0.2) 0%, rgba(110, 164, 187, 0.2) 100%), linear-gradient(90deg, rgb(255, 255, 255) 0%, rgb(255, 255, 255) 100%)'
+      : 'transparent',
+    color,
+    fontSize: '11px',
+    lineHeight: '16.5px',
+    fontWeight: 700,
+    padding: '3px 10px',
+    cursor: 'pointer',
+    position: 'relative',
+    zIndex: active ? 2 : 1,
+    marginRight: isLeft && active ? '-6px' : 0,
+  });
 
   return (
     <div style={{ padding: '0 16px 96px' }}>
-      {/* Topbar */}
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
-        borderBottom: '1px solid rgba(0,0,0,0.07)',
-        padding: '12px 16px', margin: '0 -16px',
-      }}>
-        <div style={{ fontSize: '28px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em' }}>
-          📅 {MONTH_NAMES[month]} {year}
-        </div>
-        <div style={{ fontSize: '13px', color: C.textMuted }}>
-          {viewUser.displayName}'s gym session history.
-        </div>
-      </div>
+      <PageHeader
+        title={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            <CalendarDays size={22} />
+            {MONTH_NAMES[month]} {year}
+          </span>
+        }
+        subtitle="Shared gym session history."
+      />
 
       <div style={{ paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {/* Calendar card */}
@@ -117,14 +191,14 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
             <button
               onClick={prevMonth}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: '18px', padding: '4px 8px' }}
-            >‹</button>
+            ><ChevronLeft size={18} /></button>
             <span style={{ fontSize: '15px', fontWeight: 800, color: C.textPrimary }}>
               {MONTH_NAMES[month]} {year}
             </span>
             <button
               onClick={nextMonth}
               style={{ background: 'none', border: 'none', cursor: 'pointer', color: C.textMuted, fontSize: '18px', padding: '4px 8px' }}
-            >›</button>
+            ><ChevronRight size={18} /></button>
           </div>
 
           {/* Day header */}
@@ -144,20 +218,23 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
             ))}
             {/* Day cells */}
             {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
-              const state = getDayState(d);
-              const isToday = getDateStr(d) === todayStr;
-              const bg =
-                state === 'complete' ? C.greenTint :
-                state === 'partial' ? C.warnTint :
-                'transparent';
+              const dateStr = getDateStr(d);
+              const daySessions = sessionsByDate[dateStr] ?? [];
+              const hasSelf = daySessions.some((s) => s.userId === ownerId(currentUser));
+              const hasPartner = daySessions.some((s) => s.userId === ownerId(partnerUser));
+              const isToday = dateStr === todayStr;
+              const bothWentGym = hasSelf && hasPartner;
+              const bg = bothWentGym
+                ? `linear-gradient(135deg, ${C.primaryTint} 0 50%, rgba(212,168,67,0.28) 50% 100%)`
+                : hasSelf
+                ? C.primaryTint
+                : hasPartner
+                ? 'rgba(212,168,67,0.28)'
+                : 'transparent';
               const borderColor =
-                state === 'complete' ? 'rgba(90,158,110,0.25)' :
-                state === 'partial' ? 'rgba(212,133,74,0.25)' :
+                hasSelf || hasPartner ? 'rgba(0,0,0,0.08)' :
                 'transparent';
-              const color =
-                state === 'complete' ? C.green :
-                state === 'partial' ? C.warn :
-                C.textPrimary;
+              const color = hasSelf ? C.primary : hasPartner ? C.gold : C.textPrimary;
 
               return (
                 <div
@@ -165,16 +242,16 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
                   style={{
                     aspectRatio: '1',
                     borderRadius: '8px',
-                    background: bg,
-                    border: isToday ? `1.5px dashed ${C.primary}` : `1px solid ${borderColor}`,
+                    background: bothWentGym ? 'transparent' : bg,
+                    border: bothWentGym ? '1px solid rgba(0,0,0,0)' : isToday ? `1.5px dashed ${C.primary}` : `1px solid ${borderColor}`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '12px', fontWeight: isToday || state !== 'empty' ? 700 : 400,
+                    fontSize: '12px', fontWeight: isToday || hasSelf || hasPartner ? 700 : 400,
                     color,
                     position: 'relative',
                     boxShadow: isToday ? `inset 0 0 0 2px ${C.primaryTint}` : 'none',
                   }}
                 >
-                  {d}
+                  {bothWentGym ? <BothGymDayCell day={d} /> : d}
                 </div>
               );
             })}
@@ -183,13 +260,16 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
           {/* Legend */}
           <div style={{ display: 'flex', gap: '16px', marginTop: '14px', flexWrap: 'wrap' }}>
             {[
-              { color: C.green, label: 'Full session', type: 'fill' },
-              { color: C.warn, label: 'Partial', type: 'fill' },
+              { color: C.primary, label: currentUser.displayName, type: 'fill' },
+              { color: C.gold, label: partnerUser.displayName, type: 'fill' },
               { color: C.primary, label: 'Today', type: 'dashed' },
+              { color: '#C04C4B', label: 'Both went gym', type: 'heart' },
             ].map((item) => (
               <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 {item.type === 'dashed' ? (
                   <div style={{ width: '10px', height: '10px', borderRadius: '50%', border: `1.5px dashed ${item.color}` }} />
+                ) : item.type === 'heart' ? (
+                  <BothGymBadge />
                 ) : (
                   <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color, opacity: 0.7 }} />
                 )}
@@ -197,17 +277,28 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
               </div>
             ))}
           </div>
+
         </div>
 
         {/* Session history list */}
         <div>
-          <div style={{ fontSize: '18px', fontWeight: 800, color: C.textPrimary, letterSpacing: '-0.03em', marginBottom: '12px' }}>
-            Session history
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', marginBottom: '12px' }}>
+            <div style={{ fontSize: '18px', lineHeight: '27px', fontWeight: 800, color: C.textPrimary, letterSpacing: '-0.03em' }}>
+              Session history
+            </div>
+            <div style={{ borderRadius: '999px', border: '2px solid rgba(240,219,165,0.2)', background: 'rgba(240,219,165,0.2)', padding: '1px', overflow: 'clip', display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+              <button type="button" onClick={() => setHistoryFilter('self')} style={personPillStyle(historyFilter === 'self', C.primary, true)}>
+                {currentUser.displayName}
+              </button>
+              <button type="button" onClick={() => setHistoryFilter('partner')} style={personPillStyle(historyFilter === 'partner', C.gold, false)}>
+                {partnerUser.displayName}
+              </button>
+            </div>
           </div>
 
           {monthSessions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '32px 16px', color: C.textFaint, fontSize: '14px' }}>
-              No sessions logged this month.
+              No sessions logged this month for {historyFilter === 'self' ? currentUser.displayName : partnerUser.displayName}.
             </div>
           )}
 
@@ -222,6 +313,7 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
                     return (oh * 60 + om) - (ih * 60 + im);
                   })()
                 : null;
+              const isSelfSession = session.userId === ownerId(currentUser);
 
               return (
                 <motion.div
@@ -238,15 +330,18 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
                   {/* Header row */}
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '4px' }}>
                     <div style={{ fontSize: '14px', fontWeight: 800, color: C.textPrimary }}>
-                      {session.complete ? '✅ Complete session' : '⏳ Partial session'}
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          {session.complete ? <CheckCircle2 size={14} /> : <Clock3 size={14} />}
+                          {session.complete ? 'Complete session' : 'Partial session'}
+                        </span>
                     </div>
                     <div style={{
                       padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
-                      background: session.complete ? C.greenTint : C.warnTint,
-                      color: session.complete ? C.green : C.warn,
-                      border: `1px solid ${session.complete ? C.greenBorder : C.warnBorder}`,
+                      background: isSelfSession ? C.primaryTint : 'rgba(212,168,67,0.14)',
+                      color: isSelfSession ? C.primary : C.gold,
+                      border: `1px solid ${isSelfSession ? C.primaryBorder : 'rgba(212,168,67,0.35)'}`,
                     }}>
-                      {session.complete ? 'Done' : 'Partial'}
+                      {isSelfSession ? `${currentUser.displayName} (You)` : partnerUser.displayName}
                     </div>
                   </div>
                   <div style={{ fontSize: '11px', color: C.textMuted, marginBottom: '10px' }}>{dateLabel}</div>
@@ -338,7 +433,7 @@ export function CalendarScreen({ sessions, userId, viewUser }: Props) {
                 color: '#FFF', fontSize: '18px', cursor: 'pointer',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}
-            >✕</button>
+            ><X size={18} /></button>
             <img
               src={lightbox}
               alt="Full view"

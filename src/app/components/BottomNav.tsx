@@ -1,4 +1,6 @@
-import type { TabName } from '../App';
+import type React from 'react';
+import type { TabName } from '../types';
+import { CalendarDays, Gift, Home, Settings } from 'lucide-react';
 
 const C = {
   primary: '#6EA4BB',
@@ -7,11 +9,11 @@ const C = {
   textFaint: '#B0B8C8',
 };
 
-const TABS: { id: TabName; emoji: string; label: string }[] = [
-  { id: 'home', emoji: '🏠', label: 'Home' },
-  { id: 'rewards', emoji: '🎁', label: 'Rewards' },
-  { id: 'calendar', emoji: '📅', label: 'Calendar' },
-  { id: 'settings', emoji: '⚙️', label: 'Settings' },
+const TABS: { id: TabName; icon: React.ComponentType<{ size?: number }>; label: string }[] = [
+  { id: 'home', icon: Home, label: 'Home' },
+  { id: 'rewards', icon: Gift, label: 'Rewards' },
+  { id: 'calendar', icon: CalendarDays, label: 'Calendar' },
+  { id: 'settings', icon: Settings, label: 'Settings' },
 ];
 
 interface Props {
@@ -41,6 +43,7 @@ export function BottomNav({ activeTab, onTabChange }: Props) {
     }}>
       {TABS.map((tab) => {
         const isActive = activeTab === tab.id;
+        const Icon = tab.icon;
         return (
           <button
             key={tab.id}
@@ -62,7 +65,7 @@ export function BottomNav({ activeTab, onTabChange }: Props) {
               outline: 'none',
             }}
           >
-            <span style={{ fontSize: '20px', lineHeight: 1 }}>{tab.emoji}</span>
+            <Icon size={18} />
             <span style={{
               fontSize: '11px',
               fontWeight: 700,

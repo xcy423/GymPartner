@@ -1,4 +1,5 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
+import { Dumbbell, Sparkles } from 'lucide-react';
 
 const C = {
   primary: '#6EA4BB',
@@ -20,22 +21,18 @@ export function Login({ onLogin }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [userFocus, setUserFocus] = useState(false);
   const [passFocus, setPassFocus] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     setError('');
-    setLoading(true);
-    try {
-      const ok = await onLogin(username.trim(), password);
-      if (!ok) setError('Invalid username or password. Try again.');
-    } catch {
-      setError('Something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
-    }
+    setIsSubmitting(true);
+    const ok = await onLogin(username.trim(), password);
+    setIsSubmitting(false);
+    if (!ok) setError('Invalid username or password. Try again.');
   };
 
   return (
@@ -67,16 +64,18 @@ export function Login({ onLogin }: Props) {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            fontSize: '26px',
             marginBottom: '12px',
           }}>
-            🏋️
+            <Dumbbell size={24} color={C.primaryDark} />
           </div>
-          <div style={{ fontSize: '28px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em', marginBottom: '4px' }}>
+          <div style={{ fontSize: '20px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em', marginBottom: '4px' }}>
             GymPact
           </div>
           <div style={{ fontSize: '14px', color: C.textMuted, textAlign: 'center' }}>
-            Your private gym accountability & rewards app ✨
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              Your private gym accountability and rewards app
+              <Sparkles size={14} color={C.gold} />
+            </span>
           </div>
         </div>
 
@@ -99,10 +98,10 @@ export function Login({ onLogin }: Props) {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               placeholder="codee or owen"
+              disabled={isSubmitting}
               onFocus={() => setUserFocus(true)}
               onBlur={() => setUserFocus(false)}
               autoComplete="username"
-              disabled={loading}
               style={{
                 width: '100%',
                 height: '50px',
@@ -116,7 +115,6 @@ export function Login({ onLogin }: Props) {
                 outline: 'none',
                 transition: 'border-color 0.15s, box-shadow 0.15s',
                 boxSizing: 'border-box',
-                opacity: loading ? 0.7 : 1,
               }}
             />
           </div>
@@ -139,10 +137,10 @@ export function Login({ onLogin }: Props) {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Your password"
+              disabled={isSubmitting}
               onFocus={() => setPassFocus(true)}
               onBlur={() => setPassFocus(false)}
               autoComplete="current-password"
-              disabled={loading}
               style={{
                 width: '100%',
                 height: '50px',
@@ -156,7 +154,6 @@ export function Login({ onLogin }: Props) {
                 outline: 'none',
                 transition: 'border-color 0.15s, box-shadow 0.15s',
                 boxSizing: 'border-box',
-                opacity: loading ? 0.7 : 1,
               }}
             />
           </div>
@@ -177,75 +174,29 @@ export function Login({ onLogin }: Props) {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={isSubmitting}
             style={{
               width: '100%',
               height: '50px',
               borderRadius: '999px',
-              background: loading
-                ? C.surface2
-                : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+              background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
               border: 'none',
-              color: loading ? C.textMuted : '#FFFFFF',
+              color: '#FFFFFF',
               fontSize: '15px',
               fontWeight: 700,
-              cursor: loading ? 'not-allowed' : 'pointer',
+              cursor: isSubmitting ? 'wait' : 'pointer',
               letterSpacing: '0.01em',
               transition: 'opacity 0.15s, transform 0.1s',
-              boxShadow: loading ? 'none' : `0 4px 16px rgba(110,164,187,0.40)`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '8px',
+              boxShadow: `0 4px 16px rgba(110,164,187,0.40)`,
+              opacity: isSubmitting ? 0.75 : 1,
             }}
-            onMouseEnter={(e) => {
-              if (!loading) e.currentTarget.style.opacity = '0.9';
-            }}
-            onMouseLeave={(e) => {
-              if (!loading) e.currentTarget.style.opacity = '1';
-            }}
+            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
+            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
-            {loading ? (
-              <>
-                <span
-                  style={{
-                    width: '16px',
-                    height: '16px',
-                    border: '2px solid rgba(107,114,128,0.25)',
-                    borderTopColor: C.primary,
-                    borderRadius: '50%',
-                    display: 'inline-block',
-                    animation: 'spin 0.8s linear infinite',
-                  }}
-                />
-                Signing in…
-              </>
-            ) : (
-              'Sign in →'
-            )}
+            {isSubmitting ? 'Signing in...' : 'Sign in ΓåÆ'}
           </button>
         </form>
-
-        {/* Demo hint */}
-        <div style={{
-          marginTop: '16px',
-          padding: '10px 14px',
-          borderRadius: '8px',
-          background: C.primaryTint,
-          border: `1px solid ${C.primaryBorder}`,
-          textAlign: 'center',
-          fontSize: '12px',
-          color: C.textMuted,
-        }}>
-          Demo: <strong>codee</strong> / gym123 &nbsp;·&nbsp; <strong>owen</strong> / gym456
-        </div>
       </div>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>
   );
 }

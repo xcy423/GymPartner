@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Toaster } from 'sonner';
 import { Login } from './components/Login';
-import { Home } from './components/Home';
+import { Home } from './components/HomeScreen';
 import { Rewards } from './components/Rewards';
 import { CalendarScreen } from './components/Calendar';
 import { SettingsScreen } from './components/Settings';
@@ -46,7 +46,6 @@ export interface ActiveSession {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('home');
-  const [viewMode, setViewMode] = useState<'self' | 'partner'>('self');
   const [timerMin, setTimerMin] = useState(0);
 
   const {
@@ -97,7 +96,6 @@ export default function App() {
     await supabase.auth.signOut();
     setCurrentUser(null);
     setActiveTab('home');
-    setViewMode('self');
   }, []);
 
   if (!currentUser) {
@@ -120,11 +118,23 @@ export default function App() {
     );
   }
 
-  const viewUserId = viewMode === 'partner' ? profile.partner : currentUser;
-  const viewUser = viewMode === 'partner' ? partnerProfile ?? profile : profile;
-  const weekSessions = getWeekSessions(sessions, viewUserId, viewUser.weekMode);
-  const monthSessions = getMonthSessions(sessions, viewUserId);
-  const todaySession = hasSessionToday(sessions, viewUserId);
+  if (!partnerProfile) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif", color: '#6B7280' }}
+      >
+        Partner profile not linked yet.
+      </div>
+    );
+  }
+
+  const selfWeekSessions = getWeekSessions(sessions, profile.id, profile.weekMode);
+  const partnerWeekSessions = getWeekSessions(sessions, partnerProfile.id, partnerProfile.weekMode);
+  const selfMonthSessions = getMonthSessions(sessions, profile.id);
+  const partnerMonthSessions = getMonthSessions(sessions, partnerProfile.id);
+  const selfTodaySession = hasSessionToday(sessions, profile.id);
+  const partnerTodaySession = hasSessionToday(sessions, partnerProfile.id);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif" }}>
@@ -132,39 +142,35 @@ export default function App() {
         {activeTab === 'home' && (
           <Home
             currentUser={profile}
-            viewUser={viewUser}
-            viewMode={viewMode}
+            partnerUser={partnerProfile}
             sessions={sessions}
             activeSession={activeSession}
             timerMin={timerMin}
-            weekSessions={weekSessions}
-            monthSessions={monthSessions}
-            sessionToday={todaySession}
+            selfWeekSessions={selfWeekSessions}
+            partnerWeekSessions={partnerWeekSessions}
+            selfMonthSessions={selfMonthSessions}
+            partnerMonthSessions={partnerMonthSessions}
+            selfSessionToday={selfTodaySession}
+            partnerSessionToday={partnerTodaySession}
             onCheckIn={checkIn}
             onCheckOut={checkOut}
           />
         )}
-        {activeTab === 'rewards' && partnerProfile && (
+        {activeTab === 'rewards' && (
           <Rewards
             currentUser={profile}
             partnerUser={partnerProfile}
             rewardRequests={rewardRequests}
-            viewMode={viewMode}
+            viewMode="self"
             onRequestReward={requestReward}
             onApproveReward={approveReward}
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarScreen sessions={sessions} userId={viewUserId} viewUser={viewUser} />
+          <CalendarScreen sessions={sessions} currentUser={profile} partnerUser={partnerProfile} />
         )}
         {activeTab === 'settings' && (
-          <SettingsScreen
-            user={profile}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onSaveSettings={saveSettings}
-            onLogout={handleLogout}
-          />
+          <SettingsScreen user={profile} onSaveSettings={saveSettings} onLogout={handleLogout} />
         )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />

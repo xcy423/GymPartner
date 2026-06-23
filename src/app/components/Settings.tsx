@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import type { UserData } from '../App';
+import { DoorOpen, Dumbbell, Settings } from 'lucide-react';
+import type { UserData } from '../types';
+import { PageHeader } from './PageHeader';
 
 const C = {
   primary: '#6EA4BB',
@@ -18,13 +20,11 @@ const C = {
 
 interface Props {
   user: UserData;
-  viewMode: 'self' | 'partner';
-  onViewModeChange: (mode: 'self' | 'partner') => void;
   onSaveSettings: (displayName: string, weekMode: 'fixed' | 'rolling', approvalCode: string) => void;
   onLogout: () => void;
 }
 
-export function SettingsScreen({ user, viewMode, onViewModeChange, onSaveSettings, onLogout }: Props) {
+export function SettingsScreen({ user, onSaveSettings, onLogout }: Props) {
   const [displayName, setDisplayName] = useState(user.displayName);
   const [weekMode, setWeekMode] = useState<'fixed' | 'rolling'>(user.weekMode);
   const [approvalCode, setApprovalCode] = useState(user.approvalCode);
@@ -50,59 +50,17 @@ export function SettingsScreen({ user, viewMode, onViewModeChange, onSaveSetting
 
   return (
     <div style={{ padding: '0 16px 96px' }}>
-      {/* Topbar */}
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(255,255,255,0.88)', backdropFilter: 'blur(18px)',
-        WebkitBackdropFilter: 'blur(18px)',
-        borderBottom: '1px solid rgba(0,0,0,0.07)',
-        padding: '12px 16px', margin: '0 -16px',
-      }}>
-        <div style={{ fontSize: '28px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em' }}>
-          Settings ⚙️
-        </div>
-        <div style={{ fontSize: '13px', color: C.textMuted }}>Manage your account.</div>
-      </div>
+      <PageHeader
+        title={
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+            Settings
+            <Settings size={22} />
+          </span>
+        }
+        subtitle="Manage your account."
+      />
 
       <div style={{ paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-
-        {/* Dashboard view toggle card */}
-        <div style={{
-          background: C.surface2, borderRadius: '8px',
-          border: '1px solid rgba(0,0,0,0.06)', padding: '16px',
-        }}>
-          <label style={labelStyle}>Dashboard View</label>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr',
-            background: C.surface2, borderRadius: '8px',
-            border: '1px solid rgba(0,0,0,0.06)', padding: '6px', gap: '6px',
-            marginBottom: '10px',
-          }}>
-            {[
-              { mode: 'self', label: 'My Progress' },
-              { mode: 'partner', label: `Partner View 👀` },
-            ].map((tab) => (
-              <button
-                key={tab.mode}
-                onClick={() => onViewModeChange(tab.mode as 'self' | 'partner')}
-                style={{
-                  height: '44px', borderRadius: '6px',
-                  background: viewMode === tab.mode ? '#FFFFFF' : 'transparent',
-                  border: viewMode === tab.mode ? '1px solid rgba(0,0,0,0.08)' : 'none',
-                  color: viewMode === tab.mode ? C.primary : C.textMuted,
-                  fontSize: '11px', fontWeight: 700, cursor: 'pointer',
-                  boxShadow: viewMode === tab.mode ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
-                  transition: 'all 0.15s', letterSpacing: '0.01em',
-                }}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-          <p style={{ fontSize: '12px', color: C.textMuted, lineHeight: 1.5, margin: 0 }}>
-            Switch to Partner View to see your partner's streak, sessions and progress. You can also approve their reward requests from the Rewards tab.
-          </p>
-        </div>
 
         {/* Account settings card */}
         <div style={{
@@ -185,9 +143,8 @@ export function SettingsScreen({ user, viewMode, onViewModeChange, onSaveSetting
             width: '36px', height: '36px', borderRadius: '50%',
             background: C.primaryTint, border: `1px solid ${C.primaryBorder}`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '16px',
           }}>
-            🏋️
+            <Dumbbell size={16} color={C.primaryDark} />
           </div>
         </div>
 
@@ -204,7 +161,7 @@ export function SettingsScreen({ user, viewMode, onViewModeChange, onSaveSetting
           onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.8')}
           onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
         >
-          <span>🚪</span> Sign out
+          <DoorOpen size={16} /> Sign out
         </button>
       </div>
     </div>
