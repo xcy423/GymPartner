@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { UserData, RewardRequest } from '../App';
 
@@ -24,9 +24,9 @@ const C = {
 };
 
 const REWARDS = [
-  { id: 'letter', emoji: '≡ƒÆî', name: 'Handwritten letter', desc: 'A heartfelt letter or cute small surprise gift.', cost: 200 },
-  { id: 'meal', emoji: '≡ƒì│', name: 'Home-cooked meal', desc: "Pick your favourite dish and I'll cook it just for you.", cost: 1000 },
-  { id: 'wish', emoji: 'Γ¡É', name: 'Your custom wish', desc: 'Name literally anything you want as your reward.', cost: 2000 },
+  { id: 'letter', emoji: '💌', name: 'Handwritten letter', desc: 'A heartfelt letter or cute small surprise gift.', cost: 200 },
+  { id: 'meal', emoji: '🍳', name: 'Home-cooked meal', desc: "Pick your favourite dish and I'll cook it just for you.", cost: 1000 },
+  { id: 'wish', emoji: '⭐', name: 'Your custom wish', desc: 'Name literally anything you want as your reward.', cost: 2000 },
 ];
 
 interface Props {
@@ -74,7 +74,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
       }}>
         <div>
           <div style={{ fontSize: '28px', fontWeight: 900, color: C.textPrimary, letterSpacing: '-0.05em' }}>
-            Rewards ≡ƒÄü
+            Rewards 🎁
           </div>
           <div style={{ fontSize: '13px', color: C.textMuted }}>Earn points by hitting your weekly gym goals.</div>
         </div>
@@ -164,7 +164,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
                   background: C.greenTint, border: `1px solid ${C.greenBorder}`,
                   textAlign: 'center', fontSize: '13px', fontWeight: 600, color: C.green,
                 }}>
-                  Γ£à Redeemed! {myReq?.approvedAt ? `on ${new Date(myReq.approvedAt).toLocaleDateString()}` : ''}
+                  ✅ Redeemed! {myReq?.approvedAt ? `on ${new Date(myReq.approvedAt).toLocaleDateString()}` : ''}
                 </div>
               ) : isPending ? (
                 <div style={{
@@ -172,7 +172,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
                   background: C.warnTint, border: '1px solid rgba(212,133,74,0.35)',
                   textAlign: 'center', fontSize: '12px', fontWeight: 600, color: C.warn,
                 }}>
-                  ΓÅ│ Awaiting approval from {partnerUser.displayName}ΓÇª
+                  ⏳ Awaiting approval from {partnerUser.displayName}…
                 </div>
               ) : unlocked ? (
                 <button
@@ -184,7 +184,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
                     cursor: 'pointer', boxShadow: `0 4px 12px rgba(212,168,67,0.35)`,
                   }}
                 >
-                  Request this reward Γ£¿
+                  Request this reward ✨
                 </button>
               ) : (
                 <button
@@ -203,7 +203,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
           );
         })}
 
-        {/* Approval card ΓÇö shown when partner has pending request */}
+        {/* Approval card — shown when partner has pending request */}
         <AnimatePresence>
           {pendingApproval && (
             <motion.div
@@ -219,7 +219,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
               }}
             >
               <div style={{ fontSize: '15px', fontWeight: 800, color: C.textPrimary, marginBottom: '8px' }}>
-                Γ£à Approve partner reward
+                ✅ Approve partner reward
               </div>
               <div style={{ fontSize: '13px', color: C.textMuted, marginBottom: '16px', lineHeight: 1.5 }}>
                 <strong>{partnerUser.displayName}</strong> wants to redeem{' '}
@@ -259,7 +259,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
                   cursor: 'pointer', boxShadow: `0 4px 12px rgba(110,164,187,0.35)`,
                 }}
               >
-                Approve & redeem Γ£¿
+                Approve & redeem ✨
               </button>
             </motion.div>
           )}
@@ -272,7 +272,7 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
             background: C.goldTint, border: `1px solid ${C.goldBorder}`,
             fontSize: '12px', color: C.goldDark,
           }}>
-            ΓÅ│ You have {myPendingRequests.length} pending reward request{myPendingRequests.length > 1 ? 's' : ''} awaiting {partnerUser.displayName}'s approval.
+            ⏳ You have {myPendingRequests.length} pending reward request{myPendingRequests.length > 1 ? 's' : ''} awaiting {partnerUser.displayName}'s approval.
           </div>
         )}
       </div>

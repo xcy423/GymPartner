@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { Dumbbell, Sparkles } from 'lucide-react';
 
 const C = {
@@ -193,7 +193,7 @@ export function Login({ onLogin }: Props) {
             onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
             onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
           >
-            {isSubmitting ? 'Signing in...' : 'Sign in ΓåÆ'}
+            {isSubmitting ? 'Signing in...' : 'Sign in →'}
           </button>
         </form>
       </div>
