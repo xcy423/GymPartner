@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Camera, Check, Heart, Upload, X } from 'lucide-react';
+import { Camera, Check, ChevronDown, ChevronUp, Heart, Upload, X } from 'lucide-react';
 import type { ActiveSession, Session, UserData } from '../types';
 
 const C = {
@@ -10,6 +10,7 @@ const C = {
   meTintStrong: 'rgba(110,164,187,0.18)',
   meBorder: 'rgba(110,164,187,0.35)',
   partnerTint: 'rgba(212,168,67,0.14)',
+  partnerTintStrong: 'rgba(240,219,165,0.20)',
   partnerBorder: 'rgba(212,168,67,0.35)',
   green: '#5A9E6E',
   greenTint: 'rgba(90,158,110,0.12)',
@@ -80,6 +81,16 @@ function pillStyle(active: boolean, color: string): React.CSSProperties {
   };
 }
 
+function partnerPillStyle(active: boolean): React.CSSProperties {
+  const base = pillStyle(active, C.partner);
+  return {
+    ...base,
+    background: active
+      ? 'linear-gradient(90deg, rgba(240, 219, 165, 0.2) 0%, rgba(240, 219, 165, 0.2) 100%), linear-gradient(90deg, rgb(255, 255, 255) 0%, rgb(255, 255, 255) 100%)'
+      : 'transparent',
+  };
+}
+
 export function Home({
   currentUser,
   partnerUser,
@@ -98,6 +109,7 @@ export function Home({
   const [checkOutPhoto, setCheckOutPhoto] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [sessionViewUser, setSessionViewUser] = useState<SessionViewUser>('me');
+  const [showStreakInfo, setShowStreakInfo] = useState(true);
 
   const checkInRef = useRef<HTMLInputElement>(null);
   const checkOutRef = useRef<HTMLInputElement>(null);
@@ -127,6 +139,11 @@ export function Home({
   const focusedActive = focusedIsMe ? activeSession : null;
   const focusedLoggedToday = focusedIsMe ? selfSessionToday : partnerSessionToday;
   const focusedSavedSession = focusedIsMe ? myToday : partnerToday;
+  const sessionCardBg = focusedIsMe ? '#F0F3F6' : 'rgba(240,219,165,0.3)';
+  const timelineRailBg = focusedIsMe
+    ? 'rgba(110,164,187,0.35)'
+    : 'linear-gradient(180deg, rgba(212, 168, 67, 0.6) 31.25%, rgba(240, 219, 165, 0.3) 60.577%, rgba(176, 184, 200, 0.2) 100%)';
+  const toggleShellColor = focusedIsMe ? C.partnerTintStrong : 'rgba(110,164,187,0.2)';
 
   const checkInDone = !!focusedActive || focusedLoggedToday || !!focusedSavedSession;
   const checkInLabel = focusedActive?.checkInTime
@@ -237,81 +254,115 @@ export function Home({
           background: '#F3F4F8',
           borderRadius: '12px',
           border: '1px solid rgba(0,0,0,0.06)',
-          padding: '16px',
+          padding: '12px 16px',
         }}
       >
-        <div style={{ fontSize: '15px', lineHeight: '22.5px', fontWeight: 800, letterSpacing: '-0.02em', color: C.textPrimary, marginBottom: '8px' }}>
-          How streak multiplier works
-        </div>
-        <div style={{ fontSize: '12px', lineHeight: '20px', color: C.textMuted, marginBottom: '8px' }}>
-          Complete 3+ sessions every week to grow your multiplier. Each successful week = +x0.2 bonus, capped at x3.0. Miss a week and it resets to x1.0.
-        </div>
-        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
-          {MULTIPLIERS.map((m, idx) => {
-            const isPast = idx < myMulIndex;
-            const isCurrent = idx === myMulIndex;
-            const boxColor = isCurrent ? C.me : isPast ? C.green : C.textFaint;
-            const boxBorder = isCurrent ? C.me : isPast ? C.greenBorder : 'rgba(0,0,0,0.08)';
-            const bg = isCurrent ? C.meTint : isPast ? C.greenTint : '#FFFFFF';
-            const size = isCurrent ? 44.8 : 40;
-            return (
-              <div
-                key={m}
-                style={{
-                  flexShrink: 0,
-                  width: `${size}px`,
-                  height: `${size}px`,
-                  borderRadius: isCurrent ? '8.96px' : '8px',
-                  border: `${isCurrent ? 1.68 : 1.5}px solid ${boxBorder}`,
-                  background: bg,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: boxColor,
-                  fontSize: isCurrent ? '11.2px' : '10px',
-                  lineHeight: isCurrent ? '16.8px' : '15px',
-                  fontWeight: 700,
-                }}
-              >
-                x{m.toFixed(1)}
+        <button
+          type="button"
+          onClick={() => setShowStreakInfo((v) => !v)}
+          style={{
+            width: '100%',
+            border: 'none',
+            background: 'transparent',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0',
+            cursor: 'pointer',
+          }}
+          aria-expanded={showStreakInfo}
+          aria-label="Toggle streak multiplier info"
+        >
+          <div style={{ fontSize: '15px', lineHeight: '22.5px', fontWeight: 800, letterSpacing: '-0.02em', color: C.me }}>
+            How Streak Multiplier Works
+          </div>
+          {showStreakInfo ? <ChevronUp size={16} color={C.me} /> : <ChevronDown size={16} color={C.me} />}
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showStreakInfo && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div style={{ paddingTop: '8px', fontSize: '12px', lineHeight: '20px', color: C.textMuted, marginBottom: '8px' }}>
+                Complete <span style={{ color: C.me, fontWeight: 700 }}>3+ sessions/week</span> to grow your multiplier.
+                Each successful week gives <span style={{ color: C.me, fontWeight: 700 }}>+x0.2 bonus</span>, capped at <span style={{ color: C.me, fontWeight: 700 }}>x3.0</span>.
+                Miss a week and it resets to <span style={{ color: C.me, fontWeight: 700 }}>x1.0</span>.
               </div>
-            );
-          })}
-        </div>
+
+              <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '2px' }}>
+                {MULTIPLIERS.map((m, idx) => {
+                  const isPast = idx < myMulIndex;
+                  const isCurrent = idx === myMulIndex;
+                  const boxColor = isCurrent ? C.me : isPast ? C.green : C.textFaint;
+                  const boxBorder = isCurrent ? C.me : isPast ? C.greenBorder : 'rgba(0,0,0,0.08)';
+                  const bg = isCurrent ? C.meTint : isPast ? C.greenTint : '#FFFFFF';
+                  const size = isCurrent ? 44.8 : 40;
+                  return (
+                    <div
+                      key={m}
+                      style={{
+                        flexShrink: 0,
+                        width: `${size}px`,
+                        height: `${size}px`,
+                        borderRadius: isCurrent ? '8.96px' : '8px',
+                        border: `${isCurrent ? 1.68 : 1.5}px solid ${boxBorder}`,
+                        background: bg,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: boxColor,
+                        fontSize: isCurrent ? '11.2px' : '10px',
+                        lineHeight: isCurrent ? '16.8px' : '15px',
+                        fontWeight: 700,
+                      }}
+                    >
+                      x{m.toFixed(1)}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <div style={{ marginTop: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontSize: '16px', lineHeight: '23px', fontWeight: 900, letterSpacing: '-0.02em', color: C.textPrimary }}>Today's session</div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: '999px', padding: '1px', border: '2px solid rgba(240,219,165,0.2)', background: 'rgba(240,219,165,0.2)', overflow: 'clip' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderRadius: '999px', padding: '1px', border: `2px solid ${toggleShellColor}`, background: toggleShellColor, overflow: 'clip' }}>
           <button
             type="button"
             onClick={() => setSessionViewUser('me')}
             style={{
               ...pillStyle(sessionViewUser === 'me', C.me),
-              marginRight: sessionViewUser === 'me' ? '-6px' : 0,
+              marginRight: '-6px',
             }}
           >
             {currentUser.displayName}
           </button>
-          <button type="button" onClick={() => setSessionViewUser('partner')} style={pillStyle(sessionViewUser === 'partner', C.partner)}>
+          <button type="button" onClick={() => setSessionViewUser('partner')} style={partnerPillStyle(sessionViewUser === 'partner')}>
             {partnerUser.displayName}
           </button>
         </div>
       </div>
 
       <div style={{ marginTop: '8px', position: 'relative', paddingLeft: '16px' }}>
-        <div style={{ position: 'absolute', left: '12px', top: '24px', bottom: 0, width: '8px', borderRadius: '999px', background: 'rgba(110,164,187,0.35)' }} />
+        <div style={{ position: 'absolute', left: '12px', top: '24px', bottom: 0, width: '8px', borderRadius: '999px', background: timelineRailBg }} />
 
         <div style={{ position: 'relative', marginBottom: checkInDone ? '8px' : 0 }}>
           <div style={{ position: 'absolute', left: '-16px', top: 0, width: '32px', height: '32px', borderRadius: '16px', background: checkInDone ? focusedColor : C.surface3, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
             {checkInDone ? <Check size={14} /> : '1'}
           </div>
 
-          <div style={{ marginLeft: '24px', borderRadius: '12px', background: '#F0F3F6', border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
+          <div style={{ marginLeft: '24px', borderRadius: '12px', background: sessionCardBg, border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
               <div style={{ fontSize: '15px', lineHeight: '23px', fontWeight: 800, color: C.textPrimary }}>Check-in photo 📸</div>
               {checkInLabel && (
-                <div style={{ fontSize: '18px', lineHeight: '18px', color: C.me, fontWeight: 700 }}>Checked in at {checkInLabel}</div>
+                <div style={{ fontSize: '12px', lineHeight: '18px', color: focusedColor, fontWeight: 600 }}>Checked in at {checkInLabel}</div>
               )}
             </div>
 
@@ -395,11 +446,11 @@ export function Home({
 
         {checkInDone && (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', left: '-16px', top: 0, width: '32px', height: '32px', borderRadius: '16px', background: focusedColor, color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+            <div style={{ position: 'absolute', left: '-16px', top: 0, width: '32px', height: '32px', borderRadius: '16px', background: focusedIsMe ? focusedColor : 'rgba(240,219,165,0.6)', color: focusedIsMe ? '#FFFFFF' : C.partner, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
               2
             </div>
 
-            <div style={{ marginLeft: '24px', borderRadius: '12px', background: '#F0F3F6', border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
+            <div style={{ marginLeft: '24px', borderRadius: '12px', background: sessionCardBg, border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
               <div style={{ fontSize: '15px', lineHeight: '23px', fontWeight: 800, color: C.textPrimary, marginBottom: '2px' }}>Check-out photo 📸</div>
               <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: '8px' }}>Required after at least 1 hour</div>
 
@@ -487,9 +538,57 @@ export function Home({
               )}
 
               {!focusedIsMe && (
-                <div style={{ borderRadius: '8px', border: `1px solid ${focusedBorder}`, background: focusedTint, color: focusedColor, fontSize: '12px', fontWeight: 700, padding: '10px 12px', textAlign: 'center' }}>
-                  Viewing {partnerUser.displayName}'s session state.
-                </div>
+                <>
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time in gym</span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted }}>5 / 60 min</span>
+                    </div>
+                    <div style={{ height: '6px', borderRadius: '999px', background: C.surface3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${(5 / 60) * 100}%`, borderRadius: '999px', background: 'linear-gradient(90deg, #6EA4BB 0%, #5A9E6E 100%)' }} />
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      aspectRatio: '16 / 9',
+                      borderRadius: '8px',
+                      overflow: 'hidden',
+                      background: C.surface3,
+                      border: '1.5px dashed rgba(240,219,165,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginBottom: '10px',
+                    }}
+                  >
+                    <div style={{ textAlign: 'center', color: C.textFaint, fontSize: '13px', lineHeight: '19.5px' }}>
+                      <div>📷 Press to</div>
+                      <div>Upload check-out</div>
+                    </div>
+                  </div>
+
+                  <button
+                    disabled
+                    style={{
+                      width: '100%',
+                      height: '45px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      color: C.textFaint,
+                      fontSize: '15px',
+                      fontWeight: 700,
+                      cursor: 'not-allowed',
+                      background: C.surface3,
+                    }}
+                  >
+                    Complete session 🎉
+                  </button>
+
+                  <div style={{ marginTop: '8px', fontSize: '11px', lineHeight: '16.5px', color: C.textMuted, textAlign: 'center' }}>
+                    55 minutes remaining — keep going! 💪
+                  </div>
+                </>
               )}
             </div>
           </motion.div>

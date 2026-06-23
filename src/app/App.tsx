@@ -25,6 +25,44 @@ interface DbProfileWithPartner extends DbProfile {
   partner: DbProfile | DbProfile[] | null;
 }
 
+interface DbSessionRow {
+  id: string | null;
+  user_id: string;
+  date: string;
+  check_in_time: string;
+  check_out_time: string | null;
+  check_in_photo: string | null;
+  check_out_photo: string | null;
+  complete: boolean | null;
+}
+
+function mergeSessions(base: Session[], incoming: Session[]): Session[] {
+  const keyed = new Map<string, Session>();
+  const keyFor = (s: Session) => `${s.id}|${s.userId}|${s.date}|${s.checkInTime}`;
+
+  for (const s of base) keyed.set(keyFor(s), s);
+  for (const s of incoming) keyed.set(keyFor(s), s);
+
+  return Array.from(keyed.values()).sort((a, b) => {
+    const byDate = b.date.localeCompare(a.date);
+    if (byDate !== 0) return byDate;
+    return b.checkInTime.localeCompare(a.checkInTime);
+  });
+}
+
+function mapDbSession(row: DbSessionRow): Session {
+  return {
+    id: row.id ?? `db-${row.user_id}-${row.date}-${row.check_in_time}`,
+    userId: row.user_id,
+    date: row.date,
+    checkInTime: row.check_in_time,
+    checkOutTime: row.check_out_time,
+    checkInPhoto: row.check_in_photo,
+    checkOutPhoto: row.check_out_photo,
+    complete: !!row.complete,
+  };
+}
+
 function mapProfileToUser(profile: DbProfile, partnerUsername: string): UserData {
   const defaults = INITIAL_USERS[profile.username];
   return {
@@ -159,6 +197,31 @@ export default function App() {
     setActiveSession(null);
   }, []);
 
+  useEffect(() => {
+    if (!currentUser) return;
+    const me = users[currentUser];
+    const partner = me ? users[me.partner] : null;
+    if (!me || !partner) return;
+
+    let mounted = true;
+    const loadSessionsFromDb = async () => {
+      const { data, error } = await db
+        .from('sessions')
+        .select('id, user_id, date, check_in_time, check_out_time, check_in_photo, check_out_photo, complete')
+        .in('user_id', [me.username, partner.username]);
+
+      if (error || !data || !mounted) return;
+
+      const mapped = (data as DbSessionRow[]).map(mapDbSession);
+      setSessions((prev) => mergeSessions(prev, mapped));
+    };
+
+    void loadSessionsFromDb();
+    return () => {
+      mounted = false;
+    };
+  }, [currentUser, users]);
+
   const handleCheckIn = useCallback((photo: string | null) => {
     if (!currentUser) return;
     setActiveSession({ checkInTime: new Date().toISOString(), checkInPhoto: photo });
@@ -186,6 +249,17 @@ export default function App() {
     const newSessions = [...sessions, newSession];
     setSessions(newSessions);
     setActiveSession(null);
+
+    void db.from('sessions').insert({
+      id: newSession.id,
+      user_id: newSession.userId,
+      date: newSession.date,
+      check_in_time: newSession.checkInTime,
+      check_out_time: newSession.checkOutTime,
+      check_in_photo: newSession.checkInPhoto,
+      check_out_photo: newSession.checkOutPhoto,
+      complete: newSession.complete,
+    });
 
     const user = users[currentUser];
     const weekCount = getWeekSessions(newSessions, currentUser, user.weekMode);
@@ -249,17 +323,6 @@ export default function App() {
     toast.success(`${req.rewardName} approved and redeemed.`);
     return true;
   }, [currentUser, rewardRequests, users]);
-
-  const handleUseCoupon = useCallback((requestId: string): boolean => {
-    if (!currentUser) return false;
-    const req = rewardRequests.find((r) => r.id === requestId && r.requesterId === currentUser);
-    if (!req || req.status !== 'approved') return false;
-    setRewardRequests((prev) =>
-      prev.map((r) => r.id === requestId ? { ...r, status: 'used', usedAt: new Date().toISOString() } : r)
-    );
-    toast.success(`${req.rewardName} coupon used.`);
-    return true;
-  }, [currentUser, rewardRequests]);
 
   const handleSaveSettings = useCallback((displayName: string, weekMode: 'fixed' | 'rolling', approvalCode: string) => {
     if (!currentUser) return;
@@ -328,7 +391,6 @@ export default function App() {
             rewardRequests={rewardRequests}
             onRequestReward={handleRequestReward}
             onApproveReward={handleApproveReward}
-            onUseCoupon={handleUseCoupon}
           />
         )}
         {activeTab === 'calendar' && (
