@@ -35,7 +35,7 @@ interface Props {
   rewardRequests: RewardRequest[];
   viewMode: 'self' | 'partner';
   onRequestReward: (id: string, name: string, emoji: string, cost: number) => void;
-  onApproveReward: (requestId: string, approvalCode: string) => boolean;
+  onApproveReward: (requestId: string, approvalCode: string) => boolean | Promise<boolean>;
 }
 
 export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, onRequestReward, onApproveReward }: Props) {
@@ -43,21 +43,21 @@ export function Rewards({ currentUser, partnerUser, rewardRequests, viewMode, on
   const [approveFocus, setApproveFocus] = useState(false);
 
   const myPendingRequests = rewardRequests.filter(
-    (r) => r.requesterId === currentUser.username && r.status === 'pending'
+    (r) => r.requesterId === currentUser.id && r.status === 'pending'
   );
 
   const partnerPendingRequests = rewardRequests.filter(
-    (r) => r.requesterId === partnerUser.username && r.status === 'pending'
+    (r) => r.requesterId === partnerUser.id && r.status === 'pending'
   );
 
   const getMyRequest = (rewardId: string) =>
-    rewardRequests.find((r) => r.requesterId === currentUser.username && r.rewardId === rewardId);
+    rewardRequests.find((r) => r.requesterId === currentUser.id && r.rewardId === rewardId);
 
   const pendingApproval = partnerPendingRequests[0];
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!pendingApproval) return;
-    const ok = onApproveReward(pendingApproval.id, approvalCode);
+    const ok = await onApproveReward(pendingApproval.id, approvalCode);
     if (ok) setApprovalCode('');
   };
 

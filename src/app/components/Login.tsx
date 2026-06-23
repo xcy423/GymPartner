@@ -13,21 +13,29 @@ const C = {
 };
 
 interface Props {
-  onLogin: (username: string, password: string) => boolean;
+  onLogin: (username: string, password: string) => Promise<boolean>;
 }
 
 export function Login({ onLogin }: Props) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const [userFocus, setUserFocus] = useState(false);
   const [passFocus, setPassFocus] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const ok = onLogin(username.trim(), password);
-    if (!ok) setError('Invalid username or password. Try again.');
+    setLoading(true);
+    try {
+      const ok = await onLogin(username.trim(), password);
+      if (!ok) setError('Invalid username or password. Try again.');
+    } catch {
+      setError('Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -94,6 +102,7 @@ export function Login({ onLogin }: Props) {
               onFocus={() => setUserFocus(true)}
               onBlur={() => setUserFocus(false)}
               autoComplete="username"
+              disabled={loading}
               style={{
                 width: '100%',
                 height: '50px',
@@ -107,6 +116,7 @@ export function Login({ onLogin }: Props) {
                 outline: 'none',
                 transition: 'border-color 0.15s, box-shadow 0.15s',
                 boxSizing: 'border-box',
+                opacity: loading ? 0.7 : 1,
               }}
             />
           </div>
@@ -132,6 +142,7 @@ export function Login({ onLogin }: Props) {
               onFocus={() => setPassFocus(true)}
               onBlur={() => setPassFocus(false)}
               autoComplete="current-password"
+              disabled={loading}
               style={{
                 width: '100%',
                 height: '50px',
@@ -145,6 +156,7 @@ export function Login({ onLogin }: Props) {
                 outline: 'none',
                 transition: 'border-color 0.15s, box-shadow 0.15s',
                 boxSizing: 'border-box',
+                opacity: loading ? 0.7 : 1,
               }}
             />
           </div>
@@ -165,24 +177,52 @@ export function Login({ onLogin }: Props) {
 
           <button
             type="submit"
+            disabled={loading}
             style={{
               width: '100%',
               height: '50px',
               borderRadius: '999px',
-              background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
+              background: loading
+                ? C.surface2
+                : `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
               border: 'none',
-              color: '#FFFFFF',
+              color: loading ? C.textMuted : '#FFFFFF',
               fontSize: '15px',
               fontWeight: 700,
-              cursor: 'pointer',
+              cursor: loading ? 'not-allowed' : 'pointer',
               letterSpacing: '0.01em',
               transition: 'opacity 0.15s, transform 0.1s',
-              boxShadow: `0 4px 16px rgba(110,164,187,0.40)`,
+              boxShadow: loading ? 'none' : `0 4px 16px rgba(110,164,187,0.40)`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
             }}
-            onMouseEnter={(e) => (e.currentTarget.style.opacity = '0.9')}
-            onMouseLeave={(e) => (e.currentTarget.style.opacity = '1')}
+            onMouseEnter={(e) => {
+              if (!loading) e.currentTarget.style.opacity = '0.9';
+            }}
+            onMouseLeave={(e) => {
+              if (!loading) e.currentTarget.style.opacity = '1';
+            }}
           >
-            Sign in →
+            {loading ? (
+              <>
+                <span
+                  style={{
+                    width: '16px',
+                    height: '16px',
+                    border: '2px solid rgba(107,114,128,0.25)',
+                    borderTopColor: C.primary,
+                    borderRadius: '50%',
+                    display: 'inline-block',
+                    animation: 'spin 0.8s linear infinite',
+                  }}
+                />
+                Signing in…
+              </>
+            ) : (
+              'Sign in →'
+            )}
           </button>
         </form>
 
@@ -200,6 +240,12 @@ export function Login({ onLogin }: Props) {
           Demo: <strong>codee</strong> / gym123 &nbsp;·&nbsp; <strong>owen</strong> / gym456
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   );
 }
