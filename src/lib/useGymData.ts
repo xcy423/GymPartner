@@ -33,7 +33,7 @@ interface RedemptionRequestRow {
   requester_id: string;
   approver_id: string;
   reward_id: string;
-  status: 'pending' | 'approved';
+  status: 'pending' | 'approved' | 'used';
   custom_text: string | null;
   points_deducted: number | null;
   approved_at: string | null;
@@ -406,6 +406,35 @@ export function useGymData(userId: string | null) {
     [userId, profile, partnerProfile, rewardRequests, loadData],
   );
 
+  const useCoupon = useCallback(
+    async (requestId: string): Promise<boolean> => {
+      if (!userId) return false;
+
+      const request = rewardRequests.find((item) => item.id === requestId);
+      if (!request || request.requesterId !== userId || request.status !== 'approved') {
+        return false;
+      }
+
+      try {
+        const { error } = await supabase
+          .from('redemption_requests')
+          .update({ status: 'used' })
+          .eq('id', requestId);
+
+        if (error) throw error;
+
+        toast.success('Coupon marked as used!');
+        await loadData();
+        return true;
+      } catch (error) {
+        console.error('Use coupon failed', error);
+        toast.error('Could not mark coupon as used.');
+        return false;
+      }
+    },
+    [userId, rewardRequests, loadData],
+  );
+
   const saveSettings = useCallback(
     async (displayName: string, weekMode: 'fixed' | 'rolling', approvalCode: string) => {
       if (!userId) return;
@@ -443,6 +472,7 @@ export function useGymData(userId: string | null) {
     checkOut,
     requestReward,
     approveReward,
+    useCoupon,
     saveSettings,
     refresh: loadData,
   };
