@@ -35,6 +35,13 @@ function ownerId(user: UserData): string {
   return user.id ?? user.username;
 }
 
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getDaysInMonth(year: number, month: number): number {
   return new Date(year, month + 1, 0).getDate();
 }
@@ -103,7 +110,7 @@ export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
   const [historyFilter, setHistoryFilter] = useState<'self' | 'partner'>('self');
   const [lightbox, setLightbox] = useState<string | null>(null);
 
-  const todayStr = today.toISOString().split('T')[0];
+  const todayStr = localDateString(today);
   const daysInMonth = getDaysInMonth(year, month);
   const firstDay = getFirstDayOfMonth(year, month);
 

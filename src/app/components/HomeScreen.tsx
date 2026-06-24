@@ -36,8 +36,8 @@ interface Props {
   partnerMonthSessions: number;
   selfSessionToday: boolean;
   partnerSessionToday: boolean;
-  onCheckIn: (photo: string | null) => void;
-  onCheckOut: (photo: string | null) => void;
+  onCheckIn: (photo: string | null) => Promise<boolean>;
+  onCheckOut: (photo: string | null) => Promise<boolean>;
 }
 
 type SessionViewUser = 'me' | 'partner';
@@ -114,6 +114,8 @@ export function Home({
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [sessionViewUser, setSessionViewUser] = useState<SessionViewUser>('me');
   const [showStreakInfo, setShowStreakInfo] = useState(true);
+  const [isCheckingIn, setIsCheckingIn] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
 
   const checkInRef = useRef<HTMLInputElement>(null);
   const checkOutRef = useRef<HTMLInputElement>(null);
@@ -132,7 +134,13 @@ export function Home({
     MULTIPLIERS.findIndex((m) => Math.abs(m - currentUser.multiplier) < 0.05),
   );
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
   const myToday = useMemo(() => latestSessionForDate(sessions, ownerId(currentUser), today), [sessions, currentUser]);
   const partnerToday = useMemo(() => latestSessionForDate(sessions, ownerId(partnerUser), today), [sessions, partnerUser]);
 
@@ -423,10 +431,15 @@ export function Home({
                 <input ref={checkInRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCheckInFile} />
 
                 <button
-                  onClick={() => {
-                    onCheckIn(checkInPhoto);
-                    setCheckInPreview(null);
-                    setCheckInPhoto(null);
+                  disabled={isCheckingIn}
+                  onClick={async () => {
+                    setIsCheckingIn(true);
+                    const ok = await onCheckIn(checkInPhoto);
+                    setIsCheckingIn(false);
+                    if (ok) {
+                      setCheckInPreview(null);
+                      setCheckInPhoto(null);
+                    }
                   }}
                   style={{
                     marginTop: '8px',
@@ -437,11 +450,12 @@ export function Home({
                     color: '#fff',
                     fontSize: '15px',
                     fontWeight: 800,
-                    cursor: 'pointer',
+                    cursor: isCheckingIn ? 'wait' : 'pointer',
+                    opacity: isCheckingIn ? 0.7 : 1,
                     background: `linear-gradient(135deg, ${C.me}, #4E8BA3)`,
                   }}
                 >
-                  Check in now
+                  {isCheckingIn ? 'Checking in…' : 'Check in now'}
                 </button>
               </>
             )}
@@ -498,6 +512,7 @@ export function Home({
 
                   <button
                     onClick={() => checkOutRef.current?.click()}
+                    disabled={isCheckingOut}
                     style={{
                       width: '100%',
                       height: '38px',
@@ -507,8 +522,9 @@ export function Home({
                       color: checkoutReady ? C.green : focusedColor,
                       fontSize: '13px',
                       fontWeight: 700,
-                      cursor: 'pointer',
+                      cursor: isCheckingOut ? 'wait' : 'pointer',
                       marginBottom: '8px',
+                      opacity: isCheckingOut ? 0.6 : 1,
                     }}
                   >
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
@@ -518,25 +534,35 @@ export function Home({
                   <input ref={checkOutRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCheckOutFile} />
 
                   <button
-                    onClick={() => {
-                      onCheckOut(checkOutPhoto);
-                      setCheckOutPreview(null);
-                      setCheckOutPhoto(null);
+                    onClick={async () => {
+                      if (!checkOutPhoto) {
+                        return;
+                      }
+                      setIsCheckingOut(true);
+                      const ok = await onCheckOut(checkOutPhoto);
+                      setIsCheckingOut(false);
+                      if (ok) {
+                        setCheckOutPreview(null);
+                        setCheckOutPhoto(null);
+                      }
                     }}
-                    disabled={!checkoutReady}
+                    disabled={!checkoutReady || !checkOutPhoto || isCheckingOut}
                     style={{
                       width: '100%',
                       height: '45px',
                       borderRadius: '8px',
                       border: 'none',
-                      color: checkoutReady ? '#fff' : C.textFaint,
+                      color: checkoutReady && checkOutPhoto ? '#fff' : C.textFaint,
                       fontSize: '16px',
                       fontWeight: 700,
-                      cursor: checkoutReady ? 'pointer' : 'not-allowed',
-                      background: checkoutReady ? `linear-gradient(135deg, ${C.green}, #3D8055)` : C.surface3,
+                      cursor: checkoutReady && checkOutPhoto && !isCheckingOut ? 'pointer' : 'not-allowed',
+                      background: checkoutReady && checkOutPhoto
+                        ? `linear-gradient(135deg, ${C.green}, #3D8055)`
+                        : C.surface3,
+                      opacity: isCheckingOut ? 0.7 : 1,
                     }}
                   >
-                    Complete session 🎉
+                    {isCheckingOut ? 'Completing session…' : 'Complete session 🎉'}
                   </button>
                 </>
               )}

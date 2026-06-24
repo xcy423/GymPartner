@@ -65,6 +65,13 @@ function formatTime(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function mapProfile(row: ProfileRow): UserData {
   return {
     id: row.id,
@@ -87,7 +94,7 @@ function mapSession(row: GymSessionRow): Session {
   return {
     id: row.id,
     userId: row.user_id,
-    date: checkIn.toISOString().split('T')[0],
+    date: localDateString(checkIn),
     checkInTime: formatTime(checkIn),
     checkOutTime: checkOut ? formatTime(checkOut) : null,
     checkInPhoto: row.check_in_url,
@@ -145,7 +152,7 @@ export function useGymData(userId: string | null) {
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (options?: { background?: boolean }) => {
     if (!userId) {
       setProfile(null);
       setPartnerProfile(null);
@@ -156,7 +163,9 @@ export function useGymData(userId: string | null) {
       return;
     }
 
-    setLoading(true);
+    if (!options?.background) {
+      setLoading(true);
+    }
 
     try {
       const { data: profileRow, error: profileError } = await supabase
@@ -251,8 +260,8 @@ export function useGymData(userId: string | null) {
   }, [loadData]);
 
   const checkIn = useCallback(
-    async (photo: string | null) => {
-      if (!userId || !profile) return;
+    async (photo: string | null): Promise<boolean> => {
+      if (!userId || !profile) return false;
 
       try {
         const checkInUrl = await uploadPhoto(userId, photo, 'check-in');
@@ -269,18 +278,36 @@ export function useGymData(userId: string | null) {
 
         setActiveSession({ checkInTime: now, checkInPhoto: checkInUrl });
         toast.success("📸 Checked in! Let's go 💪");
-        await loadData();
+        await loadData({ background: true });
+        return true;
       } catch (error) {
         console.error('Check-in failed', error);
-        toast.error('Check-in failed. Please try again.');
+        toast.error(`Check-in failed: ${supabaseErrorMessage(error)}`);
+        return false;
       }
     },
     [userId, profile, loadData],
   );
 
   const checkOut = useCallback(
-    async (photo: string | null) => {
-      if (!userId || !profile || !activeSession) return;
+    async (photo: string | null): Promise<boolean> => {
+      if (!userId || !profile || !activeSession) {
+        toast.error('No active session found. Please check in first.');
+        return false;
+      }
+
+      if (!photo) {
+        toast.error('Please upload a check-out photo before completing your session.');
+        return false;
+      }
+
+      const elapsedMin = Math.floor(
+        (Date.now() - new Date(activeSession.checkInTime).getTime()) / 60000,
+      );
+      if (elapsedMin < 60) {
+        toast.error(`Keep going! ${60 - elapsedMin} more minute(s) before you can check out.`);
+        return false;
+      }
 
       try {
         const { data: activeRow, error: activeError } = await supabase
@@ -310,19 +337,18 @@ export function useGymData(userId: string | null) {
 
         if (updateError) throw updateError;
 
-        const nextSessions = [
-          ...sessions,
-          {
-            id: activeRow.id,
-            userId,
-            date: now.toISOString().split('T')[0],
-            checkInTime: formatTime(checkInAt),
-            checkOutTime: formatTime(now),
-            checkInPhoto: activeSession.checkInPhoto,
-            checkOutPhoto: checkOutUrl,
-            complete: true,
-          },
-        ];
+        const completedSession: Session = {
+          id: activeRow.id,
+          userId,
+          date: localDateString(checkInAt),
+          checkInTime: formatTime(checkInAt),
+          checkOutTime: formatTime(now),
+          checkInPhoto: activeSession.checkInPhoto,
+          checkOutPhoto: checkOutUrl,
+          complete: true,
+        };
+
+        const nextSessions = [...sessions.filter((s) => s.id !== activeRow.id), completedSession];
 
         const weekCount = getWeekSessions(nextSessions, userId, profile.weekMode);
         let pts = 0;
@@ -347,12 +373,15 @@ export function useGymData(userId: string | null) {
           if (pointsError) throw pointsError;
         }
 
+        setSessions(nextSessions);
         setActiveSession(null);
         toast.success(msg);
-        await loadData();
+        await loadData({ background: true });
+        return true;
       } catch (error) {
         console.error('Check-out failed', error);
-        toast.error('Check-out failed. Please try again.');
+        toast.error(`Check-out failed: ${supabaseErrorMessage(error)}`);
+        return false;
       }
     },
     [userId, profile, activeSession, sessions, loadData],

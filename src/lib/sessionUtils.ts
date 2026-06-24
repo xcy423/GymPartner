@@ -9,6 +9,13 @@ export interface Session {
   complete: boolean;
 }
 
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 function getMonday(date: Date): Date {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
@@ -32,8 +39,8 @@ export function getWeekSessions(
   } else {
     weekStart = getMonday(today);
   }
-  const todayStr = today.toISOString().split('T')[0];
-  const weekStartStr = weekStart.toISOString().split('T')[0];
+  const todayStr = localDateString(today);
+  const weekStartStr = localDateString(weekStart);
   return sessions.filter(
     (s) => s.userId === userId && s.complete && s.date >= weekStartStr && s.date <= todayStr,
   ).length;
@@ -46,6 +53,6 @@ export function getMonthSessions(sessions: Session[], userId: string): number {
 }
 
 export function hasSessionToday(sessions: Session[], userId: string): boolean {
-  const today = new Date().toISOString().split('T')[0];
-  return sessions.some((s) => s.userId === userId && s.date === today);
+  const todayStr = localDateString(new Date());
+  return sessions.some((s) => s.userId === userId && s.date === todayStr);
 }
