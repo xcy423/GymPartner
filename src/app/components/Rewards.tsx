@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+﻿import { useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { RewardRequest, UserData } from '../App';
-import type { RewardCatalogItem } from '../../lib/useGymData';
+import { DEFAULT_REWARDS_CATALOG, type RewardCatalogItem } from '../../lib/useGymData';
 
 const C = {
   primary: '#6EA4BB',
@@ -94,8 +94,8 @@ function formatDateTime(value?: string): string {
   });
 }
 
-function rewardIconFor(rewardId: string, catalog: RewardCatalogItem[]): LucideIcon {
-  const item = catalog.find((r) => String(r.id) === rewardId);
+function rewardIconFor(rewardId: string, items: RewardCatalogItem[]): LucideIcon {
+  const item = items.find((r) => String(r.id) === rewardId);
   if (!item) return Gift;
   return iconForCost(item.cost_points).icon;
 }
@@ -115,7 +115,12 @@ export function Rewards({
   const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [approvalCode, setApprovalCode] = useState('');
 
-  const rewards = useMemo(() => catalog.map(toRewardDisplay), [catalog]);
+  const displayCatalog = useMemo(
+    () => (catalog.length > 0 ? catalog : DEFAULT_REWARDS_CATALOG),
+    [catalog],
+  );
+
+  const rewards = useMemo(() => displayCatalog.map(toRewardDisplay), [displayCatalog]);
 
   const myTickets = rewardRequests
     .filter((r) => r.requesterId === currentUser.id)
@@ -388,24 +393,7 @@ export function Rewards({
             </div>
           )}
 
-          {rewards.length === 0 ? (
-            <div
-              style={{
-                borderRadius: '12px',
-                border: '1px solid rgba(0,0,0,0.08)',
-                background: '#FFFFFF',
-                boxShadow: C.cardShadow,
-                padding: '20px',
-                fontSize: '14px',
-                fontWeight: 700,
-                color: C.textMuted,
-                textAlign: 'center',
-              }}
-            >
-              No rewards in catalog yet. Check that rewards_catalog is seeded in Supabase.
-            </div>
-          ) : (
-          rewards.map((reward) => {
+          {rewards.map((reward) => {
             const RewardIcon = reward.icon;
             const userPts = currentUser.points;
             const unlocked = userPts >= reward.cost_points;
@@ -531,8 +519,7 @@ export function Rewards({
                 )}
               </div>
             );
-          })
-          )}
+          })}
 
         </div>
       )}
@@ -557,7 +544,7 @@ export function Rewards({
             </div>
           ) : (
             myTickets.map((ticket) => {
-              const TicketIcon = rewardIconFor(ticket.rewardId, catalog);
+              const TicketIcon = rewardIconFor(ticket.rewardId, displayCatalog);
               const isRedeemed = ticket.status === 'redeemed';
               const isPendingUse = ticket.status === 'pending_use';
               const isUsed = ticket.status === 'used';

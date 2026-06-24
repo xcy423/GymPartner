@@ -1,4 +1,4 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Heart, X } from 'lucide-react';
 import type { Session, UserData } from '../types';
@@ -147,12 +147,16 @@ export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
     else setMonth(m => m + 1);
   };
 
-  const monthSessions = sessions.filter((s) => {
-    const mStr = `${year}-${String(month + 1).padStart(2, '0')}`;
-    const inMonth = s.date.startsWith(mStr);
-    if (!inMonth) return false;
-    return historyFilter === 'self' ? s.userId === ownerId(currentUser) : s.userId === ownerId(partnerUser);
-  }).sort((a, b) => b.date.localeCompare(a.date));
+  const historySessions = sessions
+    .filter((s) => {
+      const owner = historyFilter === 'self' ? ownerId(currentUser) : ownerId(partnerUser);
+      return s.userId === owner;
+    })
+    .sort((a, b) => {
+      const aTime = a.checkOutTime ?? a.checkInTime;
+      const bTime = b.checkOutTime ?? b.checkInTime;
+      return b.date.localeCompare(a.date) || bTime.localeCompare(aTime);
+    });
 
   const personPillStyle = (active: boolean, color: string, isLeft: boolean): React.CSSProperties => ({
     height: '23px',
@@ -303,14 +307,14 @@ export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
             </div>
           </div>
 
-          {monthSessions.length === 0 && (
+          {historySessions.length === 0 && (
             <div style={{ textAlign: 'center', padding: '32px 16px', color: C.textFaint, fontSize: '14px' }}>
-              No sessions logged this month for {historyFilter === 'self' ? currentUser.displayName : partnerUser.displayName}.
+              No sessions yet for {historyFilter === 'self' ? currentUser.displayName : partnerUser.displayName}.
             </div>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {monthSessions.map((session) => {
+            {historySessions.map((session) => {
               const sDate = new Date(session.date + 'T00:00:00');
               const dateLabel = sDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
               const durationMin =

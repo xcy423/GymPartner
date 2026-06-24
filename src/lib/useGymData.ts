@@ -25,9 +25,17 @@ interface GymSessionRow {
   check_out_at: string | null;
   check_in_url: string | null;
   check_out_url: string | null;
-  status: 'active' | 'complete';
+  status: string;
   duration_mins: number | null;
   earned_pts: number | null;
+}
+
+function isSessionComplete(status: string): boolean {
+  return status === 'complete' || status === 'completed';
+}
+
+function isSessionActive(status: string): boolean {
+  return status === 'active' || status === 'in_progress';
 }
 
 export interface RewardCatalogItem {
@@ -38,6 +46,33 @@ export interface RewardCatalogItem {
   cost_points: number;
   active: boolean;
 }
+
+export const DEFAULT_REWARDS_CATALOG: RewardCatalogItem[] = [
+  {
+    id: 1,
+    emoji: '💌',
+    title: 'Handwritten letter',
+    description: 'A heartfelt letter or cute small surprise gift.',
+    cost_points: 200,
+    active: true,
+  },
+  {
+    id: 2,
+    emoji: '🍳',
+    title: 'Home-cooked meal',
+    description: "Pick your favourite dish and I'll cook it just for you.",
+    cost_points: 1000,
+    active: true,
+  },
+  {
+    id: 3,
+    emoji: '⭐',
+    title: 'Your custom wish',
+    description: 'Name literally anything you want as your reward.',
+    cost_points: 2000,
+    active: true,
+  },
+];
 
 interface RedemptionRequestRow {
   id: string;
@@ -53,7 +88,11 @@ interface RedemptionRequestRow {
     emoji: string;
     title: string;
     cost_points: number;
-  } | null;
+  } | {
+    emoji: string;
+    title: string;
+    cost_points: number;
+  }[] | null;
 }
 
 function supabaseErrorMessage(error: unknown): string {
@@ -94,13 +133,17 @@ function mapSession(row: GymSessionRow): Session {
     checkOutTime: checkOut ? formatTime(checkOut) : null,
     checkInPhoto: row.check_in_url,
     checkOutPhoto: row.check_out_url,
-    complete: row.status === 'complete',
+    complete: isSessionComplete(row.status) || !!row.check_out_at,
     durationMins: row.duration_mins,
     earnedPts: row.earned_pts ?? 0,
   };
 }
 
 function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
+  const catalog = Array.isArray(row.rewards_catalog)
+    ? row.rewards_catalog[0]
+    : row.rewards_catalog;
+
   const status =
     row.status === 'redeemed' || row.status === 'pending_use' || row.status === 'used'
       ? row.status
@@ -114,9 +157,9 @@ function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
     id: row.id,
     requesterId: row.requester_id,
     rewardId: String(row.reward_id),
-    rewardName: row.rewards_catalog?.title ?? String(row.reward_id),
-    rewardEmoji: row.rewards_catalog?.emoji ?? '🎁',
-    rewardCost: row.rewards_catalog?.cost_points ?? row.points_deducted ?? 0,
+    rewardName: catalog?.title ?? String(row.reward_id),
+    rewardEmoji: catalog?.emoji ?? '🎁',
+    rewardCost: catalog?.cost_points ?? row.points_deducted ?? 0,
     status,
     redeemedAt: row.created_at ?? undefined,
     usedAt: status === 'used' ? (row.approved_at ?? undefined) : undefined,
@@ -139,12 +182,60 @@ function checkoutToastMessage(result: GymCheckOutResult): string {
   return '✅ Session complete!';
 }
 
+const SESSION_SELECT_FULL =
+  'id, user_id, check_in_at, check_out_at, check_in_url, check_out_url, status, duration_mins, earned_pts';
+const SESSION_SELECT_MINIMAL =
+  'id, user_id, check_in_at, check_out_at, status, duration_mins';
+
+async function fetchGymSessionsForUsers(
+  userId: string,
+  partnerId: string | null,
+): Promise<GymSessionRow[]> {
+  async function querySessions(select: string): Promise<GymSessionRow[]> {
+    const { data: selfRows, error: selfError } = await supabase
+      .from('gym_sessions')
+      .select(select)
+      .eq('user_id', userId)
+      .order('check_in_at', { ascending: false });
+
+    if (selfError) throw selfError;
+
+    let partnerRows: GymSessionRow[] = [];
+    if (partnerId) {
+      const { data, error: partnerError } = await supabase
+        .from('gym_sessions')
+        .select(select)
+        .eq('user_id', partnerId)
+        .order('check_in_at', { ascending: false });
+
+      if (partnerError) throw partnerError;
+      partnerRows = (data ?? []) as unknown as GymSessionRow[];
+    }
+
+    return [...((selfRows ?? []) as unknown as GymSessionRow[]), ...partnerRows];
+  }
+
+  try {
+    return await querySessions(SESSION_SELECT_FULL);
+  } catch (fullError) {
+    console.warn('Full gym_sessions select failed, retrying minimal columns', fullError);
+    const rows = await querySessions(SESSION_SELECT_MINIMAL);
+    return rows.map((row) => ({
+      ...row,
+      check_in_url: row.check_in_url ?? null,
+      check_out_url: row.check_out_url ?? null,
+      earned_pts: row.earned_pts ?? null,
+    }));
+  }
+}
+
 export function useGymData(userId: string | null) {
   const [profile, setProfile] = useState<UserData | null>(null);
   const [partnerProfile, setPartnerProfile] = useState<UserData | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [rewardRequests, setRewardRequests] = useState<RewardRequest[]>([]);
   const [catalog, setCatalog] = useState<RewardCatalogItem[]>([]);
+  const [catalogUsingFallback, setCatalogUsingFallback] = useState(false);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -155,6 +246,7 @@ export function useGymData(userId: string | null) {
       setSessions([]);
       setRewardRequests([]);
       setCatalog([]);
+      setCatalogUsingFallback(false);
       setActiveSession(null);
       return;
     }
@@ -189,31 +281,53 @@ export function useGymData(userId: string | null) {
         setPartnerProfile(null);
       }
 
-      const userIds = partnerId ? [userId, partnerId] : [userId];
+      const { data: catalogRows, error: catalogError } = await supabase
+        .from('rewards_catalog')
+        .select('id, emoji, title, description, cost_points, active')
+        .eq('active', true)
+        .order('cost_points', { ascending: true });
 
-      const { data: sessionRows, error: sessionsError } = await supabase
-        .from('gym_sessions')
-        .select('id, user_id, check_in_at, check_out_at, check_in_url, check_out_url, status, duration_mins, earned_pts')
-        .in('user_id', userIds)
-        .order('check_in_at', { ascending: false });
+      if (catalogError) {
+        console.error('Failed to load rewards catalog', catalogError);
+        toast.error(`Could not load rewards: ${supabaseErrorMessage(catalogError)}`);
+        setCatalog(DEFAULT_REWARDS_CATALOG);
+        setCatalogUsingFallback(true);
+      } else if (!catalogRows?.length) {
+        console.warn('rewards_catalog empty — using default catalog');
+        setCatalog(DEFAULT_REWARDS_CATALOG);
+        setCatalogUsingFallback(true);
+      } else {
+        setCatalog(catalogRows);
+        setCatalogUsingFallback(false);
+      }
 
-      if (sessionsError) throw sessionsError;
+      try {
+        const sessionRows = await fetchGymSessionsForUsers(userId, partnerId);
+        const mappedSessions = sessionRows.map(mapSession);
+        setSessions(mappedSessions);
 
-      const mappedSessions = (sessionRows ?? []).map(mapSession);
-      setSessions(mappedSessions);
+        const activeRow = sessionRows.find(
+          (row) => row.user_id === userId && isSessionActive(row.status),
+        );
 
-      const activeRow = (sessionRows ?? []).find(
-        (row) => row.user_id === userId && row.status === 'active',
-      );
-
-      setActiveSession((prev) => {
-        if (!activeRow) return null;
-        return {
-          id: activeRow.id,
-          checkInTime: activeRow.check_in_at,
-          checkInPhoto: activeRow.check_in_url ?? (prev?.id === activeRow.id ? prev.checkInPhoto : null),
-        };
-      });
+        setActiveSession((prev) => {
+          if (!activeRow) return null;
+          const sameSession = prev?.id === activeRow.id;
+          const checkInPhoto =
+            activeRow.check_in_url ??
+            (sameSession ? prev?.checkInPhoto ?? null : null);
+          return {
+            id: activeRow.id,
+            checkInTime: activeRow.check_in_at,
+            checkInPhoto,
+          };
+        });
+      } catch (sessionsError) {
+        console.error('Failed to load gym sessions', sessionsError);
+        toast.error(`Could not load session history: ${supabaseErrorMessage(sessionsError)}`);
+        setSessions([]);
+        setActiveSession(null);
+      }
 
       const { data: requestRows, error: requestsError } = await supabase
         .from('redemption_requests')
@@ -232,17 +346,12 @@ export function useGymData(userId: string | null) {
         .or(`requester_id.eq.${userId},approver_id.eq.${userId}`)
         .order('approved_at', { ascending: false, nullsFirst: false });
 
-      if (requestsError) throw requestsError;
-      setRewardRequests((requestRows ?? []).map(mapRewardRequest));
-
-      const { data: catalogRows, error: catalogError } = await supabase
-        .from('rewards_catalog')
-        .select('id, emoji, title, description, cost_points, active')
-        .eq('active', true)
-        .order('cost_points', { ascending: true });
-
-      if (catalogError) throw catalogError;
-      setCatalog(catalogRows ?? []);
+      if (requestsError) {
+        console.error('Failed to load redemption requests', requestsError);
+        setRewardRequests([]);
+      } else {
+        setRewardRequests((requestRows ?? []).map(mapRewardRequest));
+      }
     } catch (error) {
       console.error('Failed to load gym data', error);
       toast.error(`Failed to load your data: ${supabaseErrorMessage(error)}`);
@@ -274,6 +383,14 @@ export function useGymData(userId: string | null) {
         if (!sessionId || typeof sessionId !== 'string') {
           throw new Error('Check-in did not return a session id');
         }
+
+        const { error: photoError } = await supabase
+          .from('gym_sessions')
+          .update({ check_in_url: checkInUrl })
+          .eq('id', sessionId)
+          .eq('user_id', userId);
+
+        if (photoError) throw photoError;
 
         setActiveSession({
           id: sessionId,
@@ -357,18 +474,12 @@ export function useGymData(userId: string | null) {
   );
 
   const redeemReward = useCallback(
-    async (rewardId: number, costPoints: number) => {
-      if (!userId || !profile || !profile.partner) return;
-
-      const catalogItem = catalog.find((item) => item.id === rewardId);
-      if (!catalogItem) {
-        toast.error('Reward not found.');
-        return;
-      }
+    async (rewardId: number, costPoints: number): Promise<boolean> => {
+      if (!userId || !profile || !profile.partner) return false;
 
       if (profile.points < costPoints) {
         toast.error('Not enough points to redeem this reward.');
-        return;
+        return false;
       }
 
       try {
@@ -379,8 +490,9 @@ export function useGymData(userId: string | null) {
 
         if (error) throw error;
 
-        toast.success(`🎟️ ${catalogItem.emoji} ${catalogItem.title} redeemed! Check your Tickets tab.`);
-        await loadData();
+        toast.success('Redeemed! 🎉');
+        await loadData({ background: true });
+        return true;
       } catch (error) {
         console.error('Reward redemption failed', error);
         const message = supabaseErrorMessage(error);
@@ -389,9 +501,10 @@ export function useGymData(userId: string | null) {
         } else {
           toast.error(`Could not redeem reward: ${message}`);
         }
+        return false;
       }
     },
-    [userId, profile, catalog, loadData],
+    [userId, profile, loadData],
   );
 
   const approveCouponUse = useCallback(
@@ -499,6 +612,7 @@ export function useGymData(userId: string | null) {
     sessions,
     rewardRequests,
     catalog,
+    catalogUsingFallback,
     activeSession,
     loading,
     checkIn,

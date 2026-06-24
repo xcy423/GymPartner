@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Camera, Check, ChevronDown, ChevronUp, Heart, Upload, X } from 'lucide-react';
 import { MIN_SESSION_MINS } from '../../lib/sessionPhotos';
@@ -208,6 +208,12 @@ export function Home({
 
   const checkoutReady = timerMin >= MIN_SESSION_MINS;
   const timeRemaining = Math.max(0, MIN_SESSION_MINS - timerMin);
+
+  useEffect(() => {
+    if (activeSession?.checkInPhoto) {
+      setCheckInPreview(null);
+    }
+  }, [activeSession?.checkInPhoto]);
 
   const heroTitle = `Good Morning, ${currentUser.displayName}!`;
   const heroTip = partnerSessionToday
@@ -542,7 +548,6 @@ export function Home({
                     const ok = await onCheckIn(checkInPhoto);
                     setIsCheckingIn(false);
                     if (ok) {
-                      setCheckInPreview(null);
                       setCheckInPhoto(null);
                     }
                   }}
