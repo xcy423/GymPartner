@@ -7,9 +7,11 @@ export interface Session {
   checkInPhoto: string | null;
   checkOutPhoto: string | null;
   complete: boolean;
+  durationMins: number | null;
+  earnedPts: number;
 }
 
-function localDateString(date: Date): string {
+export function localDateString(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
@@ -54,5 +56,13 @@ export function getMonthSessions(sessions: Session[], userId: string): number {
 
 export function hasSessionToday(sessions: Session[], userId: string): boolean {
   const todayStr = localDateString(new Date());
-  return sessions.some((s) => s.userId === userId && s.date === todayStr);
+  return sessions.some((s) => s.userId === userId && s.date === todayStr && s.complete);
+}
+
+export function todayCompleteSession(sessions: Session[], userId: string): Session | null {
+  const todayStr = localDateString(new Date());
+  const todaySessions = sessions.filter(
+    (s) => s.userId === userId && s.date === todayStr && s.complete,
+  );
+  return todaySessions.length > 0 ? todaySessions[todaySessions.length - 1] : null;
 }

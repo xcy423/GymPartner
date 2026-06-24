@@ -9,6 +9,8 @@ export interface Session {
   checkInPhoto: string | null;
   checkOutPhoto: string | null;
   complete: boolean;
+  durationMins: number | null;
+  earnedPts: number;
 }
 
 export interface RewardRequest {
@@ -19,7 +21,6 @@ export interface RewardRequest {
   rewardCost: number;
   status: 'redeemed' | 'pending_use' | 'used';
   redeemedAt?: string;
-  usedAt?: string;
   usedAt?: string;
 }
 

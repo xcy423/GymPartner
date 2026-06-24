@@ -91,7 +91,7 @@ export default function App() {
       setTimerMin(elapsed);
     };
     update();
-    const id = setInterval(update, 30000);
+    const id = setInterval(update, 10000);
     return () => clearInterval(id);
   }, [activeSession]);
 

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Camera, Check, ChevronDown, ChevronUp, Heart, Upload, X } from 'lucide-react';
+import { MIN_SESSION_MINS } from '../../lib/sessionPhotos';
 import type { ActiveSession, Session, UserData } from '../types';
 
 const C = {
@@ -95,6 +96,91 @@ function partnerPillStyle(active: boolean): React.CSSProperties {
   };
 }
 
+function CompletedSessionCard({
+  session,
+  accentColor,
+  onPhotoClick,
+}: {
+  session: Session;
+  accentColor: string;
+  onPhotoClick: (url: string) => void;
+}) {
+  const duration = session.durationMins ?? null;
+
+  return (
+    <div
+      style={{
+        borderRadius: '12px',
+        background: 'linear-gradient(135deg, rgba(90,158,110,0.10) 0%, #FFFFFF 72%)',
+        border: '1px solid rgba(90,158,110,0.30)',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ fontSize: '16px', fontWeight: 800, color: C.textPrimary, display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+          <Check size={16} color={C.green} />
+          Session complete
+        </div>
+        {session.earnedPts > 0 && (
+          <div style={{ fontSize: '14px', fontWeight: 800, color: accentColor }}>+{session.earnedPts} pts</div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', fontSize: '12px', color: C.textMuted }}>
+        <span>
+          In: <strong>{session.checkInTime}</strong>
+        </span>
+        {session.checkOutTime && (
+          <span>
+            Out: <strong>{session.checkOutTime}</strong>
+          </span>
+        )}
+        {duration !== null && duration > 0 && (
+          <span>
+            Duration: <strong>{duration} min</strong>
+          </span>
+        )}
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+        {(['checkInPhoto', 'checkOutPhoto'] as const).map((key) => {
+          const photo = session[key];
+          const label = key === 'checkInPhoto' ? 'Check-in' : 'Check-out';
+          return (
+            <div key={key}>
+              <div style={{ fontSize: '10px', fontWeight: 700, color: C.textMuted, marginBottom: '4px', textTransform: 'uppercase' }}>
+                {label}
+              </div>
+              <div
+                style={{
+                  aspectRatio: '4 / 3',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: C.surface3,
+                  border: '1px solid rgba(0,0,0,0.08)',
+                  cursor: photo ? 'pointer' : 'default',
+                }}
+                onClick={() => photo && onPhotoClick(photo)}
+              >
+                {photo ? (
+                  <img src={photo} alt={label} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.textFaint, fontSize: '11px' }}>
+                    No photo
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Home({
   currentUser,
   partnerUser,
@@ -120,8 +206,8 @@ export function Home({
   const checkInRef = useRef<HTMLInputElement>(null);
   const checkOutRef = useRef<HTMLInputElement>(null);
 
-  const checkoutReady = timerMin >= 60;
-  const timeRemaining = Math.max(0, 60 - timerMin);
+  const checkoutReady = timerMin >= MIN_SESSION_MINS;
+  const timeRemaining = Math.max(0, MIN_SESSION_MINS - timerMin);
 
   const heroTitle = `Good Morning, ${currentUser.displayName}!`;
   const heroTip = partnerSessionToday
@@ -157,7 +243,17 @@ export function Home({
     : 'linear-gradient(180deg, rgba(212, 168, 67, 0.6) 31.25%, rgba(240, 219, 165, 0.3) 60.577%, rgba(176, 184, 200, 0.2) 100%)';
   const toggleShellColor = focusedIsMe ? C.partnerTintStrong : 'rgba(110,164,187,0.2)';
 
-  const checkInDone = !!focusedActive || focusedLoggedToday || !!focusedSavedSession;
+  const showCompletedCard = focusedIsMe
+    ? !!(myToday?.complete && !activeSession)
+    : !!partnerToday?.complete;
+  const completedSession = focusedIsMe ? myToday : partnerToday;
+
+  const showCheckInForm = focusedIsMe && !activeSession && !myToday?.complete;
+  const showCheckOutForm = focusedIsMe && !!activeSession;
+  const checkInDone = showCompletedCard || !!focusedActive || !!focusedSavedSession;
+  const checkInPhotoDisplay =
+    focusedActive?.checkInPhoto ?? focusedSavedSession?.checkInPhoto ?? checkInPreview;
+
   const checkInLabel = focusedActive?.checkInTime
     ? fmtClock(focusedActive.checkInTime)
     : focusedSavedSession?.checkInTime ?? null;
@@ -362,6 +458,15 @@ export function Home({
         </div>
       </div>
 
+      {showCompletedCard && completedSession ? (
+        <div style={{ marginTop: '8px' }}>
+          <CompletedSessionCard
+            session={completedSession}
+            accentColor={focusedColor}
+            onPhotoClick={setLightbox}
+          />
+        </div>
+      ) : (
       <div style={{ marginTop: '8px', position: 'relative', paddingLeft: '16px' }}>
         <div style={{ position: 'absolute', left: '12px', top: '24px', bottom: 0, width: '8px', borderRadius: '999px', background: timelineRailBg }} />
 
@@ -378,11 +483,11 @@ export function Home({
               )}
             </div>
 
-            <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: focusedIsMe && !checkInDone ? '8px' : 0 }}>
+            <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: showCheckInForm ? '8px' : 0 }}>
               Selfie or gym equipment to prove you're there.
             </div>
 
-            {focusedIsMe && !checkInDone && (
+            {showCheckInForm && (
               <>
                 <div
                   style={{
@@ -428,10 +533,10 @@ export function Home({
                     <Upload size={14} /> Choose photo
                   </span>
                 </button>
-                <input ref={checkInRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCheckInFile} />
+                <input ref={checkInRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCheckInFile} />
 
                 <button
-                  disabled={isCheckingIn}
+                  disabled={!checkInPhoto || isCheckingIn}
                   onClick={async () => {
                     setIsCheckingIn(true);
                     const ok = await onCheckIn(checkInPhoto);
@@ -450,8 +555,8 @@ export function Home({
                     color: '#fff',
                     fontSize: '15px',
                     fontWeight: 800,
-                    cursor: isCheckingIn ? 'wait' : 'pointer',
-                    opacity: isCheckingIn ? 0.7 : 1,
+                    cursor: !checkInPhoto || isCheckingIn ? 'not-allowed' : 'pointer',
+                    opacity: !checkInPhoto || isCheckingIn ? 0.6 : 1,
                     background: `linear-gradient(135deg, ${C.me}, #4E8BA3)`,
                   }}
                 >
@@ -459,10 +564,26 @@ export function Home({
                 </button>
               </>
             )}
+
+            {checkInDone && !showCheckInForm && checkInPhotoDisplay && (
+              <div
+                style={{
+                  aspectRatio: '16 / 9',
+                  borderRadius: '8px',
+                  overflow: 'hidden',
+                  background: C.surface3,
+                  border: `1px solid ${focusedBorder}`,
+                  cursor: 'pointer',
+                }}
+                onClick={() => setLightbox(checkInPhotoDisplay)}
+              >
+                <img src={checkInPhotoDisplay} alt="Check-in" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            )}
           </div>
         </div>
 
-        {checkInDone && (
+        {showCheckOutForm && (
           <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', left: '-16px', top: 0, width: '32px', height: '32px', borderRadius: '16px', background: focusedIsMe ? focusedColor : 'rgba(240,219,165,0.6)', color: focusedIsMe ? '#FFFFFF' : C.partner, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
               2
@@ -470,17 +591,18 @@ export function Home({
 
             <div style={{ marginLeft: '24px', borderRadius: '12px', background: sessionCardBg, border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
               <div style={{ fontSize: '15px', lineHeight: '23px', fontWeight: 800, color: C.textPrimary, marginBottom: '2px' }}>Check-out photo 📸</div>
-              <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: '8px' }}>Required after at least 1 hour</div>
+              <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: '8px' }}>
+                Required after at least {MIN_SESSION_MINS} minutes
+              </div>
 
-              {focusedIsMe && (
-                <>
+              <>
                   <div style={{ marginBottom: '8px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
                       <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time in gym</span>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted }}>{timerMin} / 60 min</span>
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted }}>{timerMin} / {MIN_SESSION_MINS} min</span>
                     </div>
                     <div style={{ height: '6px', borderRadius: '999px', background: C.surface3, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min((timerMin / 60) * 100, 100)}%`, borderRadius: '999px', background: focusedColor }} />
+                      <div style={{ height: '100%', width: `${Math.min((timerMin / MIN_SESSION_MINS) * 100, 100)}%`, borderRadius: '999px', background: focusedColor }} />
                     </div>
                   </div>
 
@@ -531,7 +653,7 @@ export function Home({
                       <Upload size={14} /> Choose photo
                     </span>
                   </button>
-                  <input ref={checkOutRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onCheckOutFile} />
+                  <input ref={checkOutRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onCheckOutFile} />
 
                   <button
                     onClick={async () => {
@@ -564,68 +686,31 @@ export function Home({
                   >
                     {isCheckingOut ? 'Completing session…' : 'Complete session 🎉'}
                   </button>
-                </>
-              )}
+              </>
+            </div>
+          </motion.div>
+        )}
 
-              {!focusedIsMe && (
-                <>
-                  <div style={{ marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Time in gym</span>
-                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.textMuted }}>5 / 60 min</span>
-                    </div>
-                    <div style={{ height: '6px', borderRadius: '999px', background: C.surface3, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${(5 / 60) * 100}%`, borderRadius: '999px', background: 'linear-gradient(90deg, #6EA4BB 0%, #5A9E6E 100%)' }} />
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      aspectRatio: '16 / 9',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      background: C.surface3,
-                      border: '1.5px dashed rgba(240,219,165,0.2)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      marginBottom: '10px',
-                    }}
-                  >
-                    <div style={{ textAlign: 'center', color: C.textFaint, fontSize: '13px', lineHeight: '19.5px' }}>
-                      <div>📷 Press to</div>
-                      <div>Upload check-out</div>
-                    </div>
-                  </div>
-
-                  <button
-                    disabled
-                    style={{
-                      width: '100%',
-                      height: '45px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      color: C.textFaint,
-                      fontSize: '15px',
-                      fontWeight: 700,
-                      cursor: 'not-allowed',
-                      background: C.surface3,
-                    }}
-                  >
-                    Complete session 🎉
-                  </button>
-
-                  <div style={{ marginTop: '8px', fontSize: '11px', lineHeight: '16.5px', color: C.textMuted, textAlign: 'center' }}>
-                    55 minutes remaining — keep going! 💪
-                  </div>
-                </>
-              )}
+        {!focusedIsMe && !partnerToday?.complete && checkInDone && (
+          <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', left: '-16px', top: 0, width: '32px', height: '32px', borderRadius: '16px', background: 'rgba(240,219,165,0.6)', color: C.partner, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+              2
+            </div>
+            <div style={{ marginLeft: '24px', borderRadius: '12px', background: sessionCardBg, border: '1px solid rgba(0,0,0,0.06)', padding: '16px' }}>
+              <div style={{ fontSize: '15px', lineHeight: '23px', fontWeight: 800, color: C.textPrimary, marginBottom: '2px' }}>Check-out photo 📸</div>
+              <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted, marginBottom: '8px' }}>
+                {partnerUser.displayName} is still in session…
+              </div>
+              <div style={{ fontSize: '11px', lineHeight: '16.5px', color: C.textMuted, textAlign: 'center' }}>
+                Waiting for them to finish their workout.
+              </div>
             </div>
           </motion.div>
         )}
       </div>
+      )}
 
-      {focusedIsMe && checkInDone && (
+      {showCheckOutForm && (
         <div style={{ position: 'fixed', left: '50%', transform: 'translateX(-50%)', bottom: '55px', width: 'min(420px, calc(100vw - 24px))', borderRadius: '8px 8px 0 0', background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)', borderBottom: 'none', padding: '8px 12px', zIndex: 60, textAlign: 'center', boxShadow: '0 -1px 6px rgba(0,0,0,0.08)', color: C.textMuted, fontSize: '11px', lineHeight: '17px' }}>
           {checkoutReady ? 'You can complete this session now. 💪' : `${timeRemaining} minutes remaining - keep going! 💪`}
         </div>

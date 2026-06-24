@@ -313,13 +313,15 @@ export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
             {monthSessions.map((session) => {
               const sDate = new Date(session.date + 'T00:00:00');
               const dateLabel = sDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
-              const durationMin = session.checkOutTime
-                ? (() => {
-                    const [ih, im] = session.checkInTime.split(':').map(Number);
-                    const [oh, om] = session.checkOutTime.split(':').map(Number);
-                    return (oh * 60 + om) - (ih * 60 + im);
-                  })()
-                : null;
+              const durationMin =
+                session.durationMins ??
+                (session.checkOutTime
+                  ? (() => {
+                      const [ih, im] = session.checkInTime.split(':').map(Number);
+                      const [oh, om] = session.checkOutTime.split(':').map(Number);
+                      return oh * 60 + om - (ih * 60 + im);
+                    })()
+                  : null);
               const isSelfSession = session.userId === ownerId(currentUser);
 
               return (
@@ -354,13 +356,16 @@ export function CalendarScreen({ sessions, currentUser, partnerUser }: Props) {
                   <div style={{ fontSize: '11px', color: C.textMuted, marginBottom: '10px' }}>{dateLabel}</div>
 
                   {/* Times */}
-                  <div style={{ display: 'flex', gap: '16px', marginBottom: '12px' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', marginBottom: '12px', alignItems: 'center' }}>
                     <span style={{ fontSize: '11px', color: C.textMuted }}>In: <strong>{session.checkInTime}</strong></span>
                     {session.checkOutTime && (
                       <span style={{ fontSize: '11px', color: C.textMuted }}>Out: <strong>{session.checkOutTime}</strong></span>
                     )}
                     {durationMin !== null && durationMin > 0 && (
                       <span style={{ fontSize: '11px', color: C.textMuted }}><strong>{durationMin} min</strong></span>
+                    )}
+                    {session.earnedPts > 0 && (
+                      <span style={{ fontSize: '11px', fontWeight: 700, color: C.green }}>+{session.earnedPts} pts</span>
                     )}
                   </div>
 

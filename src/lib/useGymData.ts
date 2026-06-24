@@ -2,6 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import type { ActiveSession, GymCheckOutResult, RewardRequest, UserData } from '../app/App';
 import type { Session } from './sessionUtils';
+import { localDateString } from './sessionUtils';
+import { MIN_SESSION_MINS, uploadSessionPhoto } from './sessionPhotos';
 import { supabase } from './supabase';
 
 interface ProfileRow {
@@ -25,6 +27,7 @@ interface GymSessionRow {
   check_out_url: string | null;
   status: 'active' | 'complete';
   duration_mins: number | null;
+  earned_pts: number | null;
 }
 
 export interface RewardCatalogItem {
@@ -64,13 +67,6 @@ function formatTime(date: Date): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-function localDateString(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
-
 function mapProfile(row: ProfileRow): UserData {
   return {
     id: row.id,
@@ -99,6 +95,8 @@ function mapSession(row: GymSessionRow): Session {
     checkInPhoto: row.check_in_url,
     checkOutPhoto: row.check_out_url,
     complete: row.status === 'complete',
+    durationMins: row.duration_mins,
+    earnedPts: row.earned_pts ?? 0,
   };
 }
 
@@ -127,13 +125,13 @@ function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
 
 function checkoutToastMessage(result: GymCheckOutResult): string {
   if (result.earned_pts > 0 && result.week_count === 3) {
-    return `Weekly goal hit! +${result.earned_pts} pts 🎉 (${result.week_count} sessions · ${result.multiplier}x)`;
+    return `Weekly goal hit! +${result.earned_pts} pts 🎉`;
   }
   if (result.earned_pts > 0 && result.week_count === 5) {
-    return `Bonus session! +${result.earned_pts} pts 🔥 (${result.week_count} sessions · ${result.multiplier}x)`;
+    return `Bonus session! +${result.earned_pts} pts 🔥`;
   }
   if (result.earned_pts > 0) {
-    return `+${result.earned_pts} pts earned! Week: ${result.week_count} sessions · ${result.multiplier}x multiplier`;
+    return `+${result.earned_pts} pts earned! (${result.week_count} sessions · ${result.multiplier}x)`;
   }
   if (result.week_count < 3) {
     return `✅ Session complete! ${3 - result.week_count} more this week to earn points.`;
@@ -195,7 +193,7 @@ export function useGymData(userId: string | null) {
 
       const { data: sessionRows, error: sessionsError } = await supabase
         .from('gym_sessions')
-        .select('id, user_id, check_in_at, check_out_at, check_in_url, check_out_url, status, duration_mins')
+        .select('id, user_id, check_in_at, check_out_at, check_in_url, check_out_url, status, duration_mins, earned_pts')
         .in('user_id', userIds)
         .order('check_in_at', { ascending: false });
 
@@ -208,15 +206,14 @@ export function useGymData(userId: string | null) {
         (row) => row.user_id === userId && row.status === 'active',
       );
 
-      setActiveSession(
-        activeRow
-          ? {
-              id: activeRow.id,
-              checkInTime: activeRow.check_in_at,
-              checkInPhoto: activeRow.check_in_url,
-            }
-          : null,
-      );
+      setActiveSession((prev) => {
+        if (!activeRow) return null;
+        return {
+          id: activeRow.id,
+          checkInTime: activeRow.check_in_at,
+          checkInPhoto: activeRow.check_in_url ?? (prev?.id === activeRow.id ? prev.checkInPhoto : null),
+        };
+      });
 
       const { data: requestRows, error: requestsError } = await supabase
         .from('redemption_requests')
@@ -259,10 +256,18 @@ export function useGymData(userId: string | null) {
   }, [loadData]);
 
   const checkIn = useCallback(
-    async (_photo: string | null): Promise<boolean> => {
+    async (photo: string | null): Promise<boolean> => {
       if (!userId || !profile) return false;
 
+      if (!photo) {
+        toast.error('Please add a check-in photo before starting your session.');
+        return false;
+      }
+
       try {
+        const date = localDateString(new Date());
+        const checkInUrl = await uploadSessionPhoto(userId, date, 'checkin', photo);
+
         const { data: sessionId, error } = await supabase.rpc('gym_check_in');
 
         if (error) throw error;
@@ -273,7 +278,7 @@ export function useGymData(userId: string | null) {
         setActiveSession({
           id: sessionId,
           checkInTime: new Date().toISOString(),
-          checkInPhoto: null,
+          checkInPhoto: checkInUrl,
         });
         toast.success("📸 Checked in! Let's go 💪");
         await loadData({ background: true });
@@ -288,21 +293,34 @@ export function useGymData(userId: string | null) {
   );
 
   const checkOut = useCallback(
-    async (_photo: string | null): Promise<boolean> => {
+    async (photo: string | null): Promise<boolean> => {
       if (!userId || !profile || !activeSession) {
         toast.error('No active session found. Please check in first.');
+        return false;
+      }
+
+      if (!photo) {
+        toast.error('Please upload a check-out photo before completing your session.');
+        return false;
+      }
+
+      if (!activeSession.checkInPhoto) {
+        toast.error('Check-in photo missing. Please check in again.');
         return false;
       }
 
       const elapsedMin = Math.floor(
         (Date.now() - new Date(activeSession.checkInTime).getTime()) / 60000,
       );
-      if (elapsedMin < 60) {
-        toast.error(`Keep going! ${60 - elapsedMin} more minute(s) before you can check out.`);
+      if (elapsedMin < MIN_SESSION_MINS) {
+        toast.error(`Keep going! ${MIN_SESSION_MINS - elapsedMin} more minute(s) before you can check out.`);
         return false;
       }
 
       try {
+        const date = localDateString(new Date(activeSession.checkInTime));
+        const checkOutUrl = await uploadSessionPhoto(userId, date, 'checkout', photo);
+
         const { data: result, error } = await supabase.rpc('gym_check_out', {
           p_session_id: activeSession.id,
         });
@@ -313,6 +331,18 @@ export function useGymData(userId: string | null) {
         }
 
         const checkout = result as GymCheckOutResult;
+
+        const { error: photoError } = await supabase
+          .from('gym_sessions')
+          .update({
+            check_in_url: activeSession.checkInPhoto,
+            check_out_url: checkOutUrl,
+            earned_pts: checkout.earned_pts,
+          })
+          .eq('id', activeSession.id);
+
+        if (photoError) throw photoError;
+
         setActiveSession(null);
         toast.success(checkoutToastMessage(checkout));
         await loadData({ background: true });
