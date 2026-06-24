@@ -374,22 +374,9 @@ export function useGymData(userId: string | null) {
       }
 
       try {
-        const nextPoints = Math.max(0, profile.points - costPoints);
-
-        const { error: pointsError } = await supabase
-          .from('profiles')
-          .update({ points: nextPoints })
-          .eq('id', userId);
-
-        if (pointsError) throw pointsError;
-
-        const { error } = await supabase.from('redemption_requests').insert({
-          requester_id: userId,
-          approver_id: profile.partner,
-          reward_id: rewardId,
-          status: 'redeemed',
-          custom_text: null,
-          points_deducted: costPoints,
+        const { error } = await supabase.rpc('redeem_reward', {
+          p_reward_id: rewardId,
+          p_points_cost: costPoints,
         });
 
         if (error) throw error;
@@ -398,7 +385,12 @@ export function useGymData(userId: string | null) {
         await loadData();
       } catch (error) {
         console.error('Reward redemption failed', error);
-        toast.error(`Could not redeem reward: ${supabaseErrorMessage(error)}`);
+        const message = supabaseErrorMessage(error);
+        if (message.toLowerCase().includes('not enough points')) {
+          toast.error('Not enough points to redeem this reward.');
+        } else {
+          toast.error(`Could not redeem reward: ${message}`);
+        }
       }
     },
     [userId, profile, catalog, loadData],
@@ -412,7 +404,7 @@ export function useGymData(userId: string | null) {
       if (!request || request.status !== 'pending_use') return false;
 
       try {
-        const { error } = await supabase.rpc('approve_coupon_use', {
+        const { error } = await supabase.rpc('approve_redemption_request', {
           p_request_id: requestId,
           p_approval_code: approvalCode,
         });
