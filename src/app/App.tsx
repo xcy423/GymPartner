@@ -40,8 +40,18 @@ export interface UserData {
 }
 
 export interface ActiveSession {
+  id: string;
   checkInTime: string;
   checkInPhoto: string | null;
+}
+
+export interface GymCheckOutResult {
+  session_id: string;
+  duration_mins: number;
+  week_count: number;
+  base_pts: number;
+  multiplier: number;
+  earned_pts: number;
 }
 
 export default function App() {

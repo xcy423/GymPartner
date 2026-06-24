@@ -37,6 +37,7 @@ export interface UserData {
 }
 
 export interface ActiveSession {
+  id: string;
   checkInTime: string;
   checkInPhoto: string | null;
 }
