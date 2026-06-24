@@ -1,41 +1,35 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Toaster } from 'sonner';
+import { toast, Toaster } from 'sonner';
+import { supabase } from '../lib/supabase';
+import { useGymData, type Profile, type GymSession } from '../lib/useGymData';
 import { Login } from './components/Login';
-import { Home } from './components/HomeScreen';
+import { Home } from './components/Home';
 import { Rewards } from './components/Rewards';
 import { CalendarScreen } from './components/Calendar';
 import { SettingsScreen } from './components/Settings';
 import { BottomNav } from './components/BottomNav';
-import { supabase } from '../lib/supabase';
-import { useGymData } from '../lib/useGymData';
-import { getWeekSessions, getMonthSessions, hasSessionToday } from '../lib/sessionUtils';
 
 export type TabName = 'home' | 'rewards' | 'calendar' | 'settings';
 
-export type { Session } from '../lib/sessionUtils';
-
-export interface RewardRequest {
-  id: string;
-  requesterId: string;
-  rewardId: string;
-  rewardName: string;
-  rewardEmoji: string;
-  rewardCost: number;
-  status: 'pending' | 'approved' | 'used';
-  approvedAt?: string;
-}
-
 export interface UserData {
   id: string;
-  username: string;
-  password: string;
   displayName: string;
-  partner: string;
-  approvalCode: string;
   points: number;
   multiplier: number;
   weekStreak: number;
   weekMode: 'fixed' | 'rolling';
+  approvalCode: string;
+}
+
+export interface Session {
+  id: string;
+  userId: string;
+  date: string;
+  checkInTime: string;
+  checkOutTime: string | null;
+  checkInPhoto: string | null;
+  checkOutPhoto: string | null;
+  complete: boolean;
 }
 
 export interface ActiveSession {
@@ -43,10 +37,43 @@ export interface ActiveSession {
   checkInPhoto: string | null;
 }
 
+function formatTime(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function mapProfileToUserData(profile: Profile): UserData {
+  return {
+    id: profile.id,
+    displayName: profile.display_name,
+    points: profile.points,
+    multiplier: profile.multiplier,
+    weekStreak: profile.streak_weeks,
+    weekMode: profile.weekly_mode,
+    approvalCode: profile.approval_code,
+  };
+}
+
+function mapGymSessions(sessions: GymSession[]): Session[] {
+  return sessions.map((row) => {
+    const checkIn = new Date(row.check_in_at);
+    const checkOut = row.check_out_at ? new Date(row.check_out_at) : null;
+    return {
+      id: row.id,
+      userId: row.user_id,
+      date: checkIn.toISOString().split('T')[0],
+      checkInTime: formatTime(checkIn),
+      checkOutTime: checkOut ? formatTime(checkOut) : null,
+      checkInPhoto: row.check_in_url,
+      checkOutPhoto: row.check_out_url,
+      complete: row.status === 'complete',
+    };
+  });
+}
+
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('home');
-  const [timerMin, setTimerMin] = useState(0);
+  const [viewMode, setViewMode] = useState<'self' | 'partner'>('self');
 
   const {
     profile,
@@ -54,53 +81,83 @@ export default function App() {
     sessions,
     rewardRequests,
     catalog,
-    activeSession,
-    loading,
     checkIn,
     checkOut,
     requestReward,
     approveReward,
-    useCoupon,
     saveSettings,
-  } = useGymData(currentUser);
+  } = useGymData(currentUserId);
 
+  // Restore session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setCurrentUser(data.session.user.id);
+      if (data.session) setCurrentUserId(data.session.user.id);
     });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user.id ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
-
-  useEffect(() => {
-    if (!activeSession) {
-      setTimerMin(0);
-      return;
-    }
-    const update = () => {
-      const elapsed = Math.floor((Date.now() - new Date(activeSession.checkInTime).getTime()) / 60000);
-      setTimerMin(elapsed);
-    };
-    update();
-    const id = setInterval(update, 30000);
-    return () => clearInterval(id);
-  }, [activeSession]);
 
   const handleLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
     const { error, data } = await supabase.auth.signInWithPassword({
       email: `${username.toLowerCase()}@gympact.app`,
       password,
     });
-    if (error) return false;
-    setCurrentUser(data.user.id);
+    if (error) {
+      toast.error('Wrong username or password');
+      return false;
+    }
+    setCurrentUserId(data.user.id);
     return true;
   }, []);
 
   const handleLogout = useCallback(async () => {
     await supabase.auth.signOut();
-    setCurrentUser(null);
+    setCurrentUserId(null);
     setActiveTab('home');
+    setViewMode('self');
   }, []);
 
-  if (!currentUser) {
+  const handleCheckIn = useCallback(async (photo: string | null) => {
+    await checkIn(photo);
+    toast.success("📸 Checked in! Let's go 💪");
+  }, [checkIn]);
+
+  const handleCheckOut = useCallback(async (sessionId: string, photo: string | null) => {
+    await checkOut(sessionId, photo);
+    toast.success('✅ Session complete! Points updated.');
+  }, [checkOut]);
+
+  const handleRequestReward = useCallback(async (rewardId: number, costPoints: number) => {
+    const exists = rewardRequests.find(
+      r => r.requester_id === currentUserId && r.reward_id === rewardId && r.status === 'pending'
+    );
+    if (exists) { toast.info('Already requested — waiting for approval!'); return; }
+    const ok = await requestReward(rewardId, costPoints);
+    if (!ok) return;
+    const partnerName = partnerProfile?.display_name ?? 'your partner';
+    toast.success(`✨ Reward requested! Waiting for ${partnerName} to approve.`);
+  }, [currentUserId, rewardRequests, requestReward, partnerProfile]);
+
+  const handleApproveReward = useCallback(async (requestId: string, approvalCode: string): Promise<boolean> => {
+    const ok = await approveReward(requestId, approvalCode);
+    if (ok) {
+      toast.success('✅ Reward approved and redeemed!');
+    }
+    return ok;
+  }, [approveReward]);
+
+  const handleSaveSettings = useCallback(async (
+    displayName: string,
+    weekMode: 'fixed' | 'rolling',
+    approvalCode: string
+  ) => {
+    await saveSettings(displayName, weekMode, approvalCode);
+    toast.success('✅ Settings saved!');
+  }, [saveSettings]);
+
+  if (!currentUserId || !profile) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F8F8FB', fontFamily: "'Inter', sans-serif" }}>
         <Login onLogin={handleLogin} />
@@ -109,75 +166,109 @@ export default function App() {
     );
   }
 
-  if (loading || !profile) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif", color: '#6B7280' }}
-      >
-        Loading your gym data…
-      </div>
-    );
-  }
+  const viewProfile = viewMode === 'partner' ? partnerProfile : profile;
+  if (!viewProfile || !partnerProfile) return null;
 
-  if (!partnerProfile) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif", color: '#6B7280' }}
-      >
-        Partner profile not linked yet.
-      </div>
-    );
-  }
+  const currentUserView = mapProfileToUserData(profile);
+  const viewUser = mapProfileToUserData(viewProfile);
+  const calendarSessions = mapGymSessions(sessions);
 
-  const selfWeekSessions = getWeekSessions(sessions, profile.id, profile.weekMode);
-  const partnerWeekSessions = getWeekSessions(sessions, partnerProfile.id, partnerProfile.weekMode);
-  const selfMonthSessions = getMonthSessions(sessions, profile.id);
-  const partnerMonthSessions = getMonthSessions(sessions, partnerProfile.id);
-  const selfTodaySession = hasSessionToday(sessions, profile.id);
-  const partnerTodaySession = hasSessionToday(sessions, partnerProfile.id);
+  // Compute derived stats for the viewed user
+  const today = new Date();
+  const weekStart = getWeekStart(viewProfile.weekly_mode);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const weekSessions = sessions.filter(
+    s => s.user_id === viewProfile.id &&
+      s.status === 'complete' &&
+      s.check_in_at >= weekStart
+  ).length;
+
+  const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const monthSessions = sessions.filter(
+    s => s.user_id === viewProfile.id &&
+      s.status === 'complete' &&
+      s.check_in_at.startsWith(monthStr)
+  ).length;
+
+  const sessionToday = sessions.some(
+    s => s.user_id === viewProfile.id && s.check_in_at.startsWith(todayStr)
+  );
+
+  const activeSession = sessions.find(
+    s => s.user_id === profile.id && s.status === 'active'
+  ) ?? null;
+
+  const timerMin = activeSession
+    ? Math.floor((Date.now() - new Date(activeSession.check_in_at).getTime()) / 60000)
+    : 0;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif" }}>
       <div style={{ maxWidth: '440px', margin: '0 auto', position: 'relative' }}>
         {activeTab === 'home' && (
           <Home
-            currentUser={profile}
-            partnerUser={partnerProfile}
-            sessions={sessions}
-            activeSession={activeSession}
+            currentUser={currentUserView}
+            viewUser={viewUser}
+            viewMode={viewMode}
+            sessions={calendarSessions}
+            activeSession={activeSession ? { checkInTime: activeSession.check_in_at, checkInPhoto: activeSession.check_in_url } : null}
             timerMin={timerMin}
-            selfWeekSessions={selfWeekSessions}
-            partnerWeekSessions={partnerWeekSessions}
-            selfMonthSessions={selfMonthSessions}
-            partnerMonthSessions={partnerMonthSessions}
-            selfSessionToday={selfTodaySession}
-            partnerSessionToday={partnerTodaySession}
-            onCheckIn={checkIn}
-            onCheckOut={checkOut}
+            weekSessions={weekSessions}
+            monthSessions={monthSessions}
+            sessionToday={sessionToday}
+            onCheckIn={handleCheckIn}
+            onCheckOut={(photo) => {
+              if (activeSession) handleCheckOut(activeSession.id, photo);
+            }}
           />
         )}
-        {activeTab === 'rewards' && (
+        {activeTab === 'rewards' && partnerProfile && (
           <Rewards
             currentUser={profile}
             partnerUser={partnerProfile}
             catalog={catalog}
             rewardRequests={rewardRequests}
-            onRequestReward={requestReward}
-            onApproveReward={approveReward}
-            onUseCoupon={useCoupon}
+            viewMode={viewMode}
+            onRequestReward={handleRequestReward}
+            onApproveReward={handleApproveReward}
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarScreen sessions={sessions} currentUser={profile} partnerUser={partnerProfile} />
+          <CalendarScreen
+            sessions={calendarSessions}
+            userId={viewProfile.id}
+            viewUser={viewUser}
+          />
         )}
         {activeTab === 'settings' && (
-          <SettingsScreen user={profile} onSaveSettings={saveSettings} onLogout={handleLogout} />
+          <SettingsScreen
+            user={currentUserView}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onSaveSettings={handleSaveSettings}
+            onLogout={handleLogout}
+          />
         )}
       </div>
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
       <Toaster position="top-center" richColors />
     </div>
   );
+}
+
+function getWeekStart(mode: 'fixed' | 'rolling'): string {
+  const today = new Date();
+  if (mode === 'rolling') {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 6);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  const d = new Date(today);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 }
