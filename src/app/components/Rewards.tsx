@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
+  ChevronDown,
   Clock3,
   Filter,
   Gift,
@@ -25,6 +26,10 @@ const C = {
   goldDark: '#B88E2F',
   goldTint: 'rgba(212,168,67,0.12)',
   goldBorder: 'rgba(212,168,67,0.35)',
+  red: '#C04C4B',
+  redDark: '#A03D3C',
+  redTint: 'rgba(192,76,75,0.10)',
+  redBorder: 'rgba(192,76,75,0.30)',
   green: '#5A9E6E',
   greenDark: '#3D8055',
   greenTint: 'rgba(90,158,110,0.12)',
@@ -107,8 +112,8 @@ export function Rewards({
   const [view, setView] = useState<'rewards' | 'tickets'>('rewards');
   const [confirmRewardId, setConfirmRewardId] = useState<number | null>(null);
   const [confirmUseTicketId, setConfirmUseTicketId] = useState<string | null>(null);
+  const [approvalExpanded, setApprovalExpanded] = useState(false);
   const [approvalCode, setApprovalCode] = useState('');
-  const approvalCardRef = useRef<HTMLDivElement | null>(null);
 
   const rewards = useMemo(() => catalog.map(toRewardDisplay), [catalog]);
 
@@ -252,31 +257,135 @@ export function Rewards({
       {view === 'rewards' && (
         <div style={{ paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {partnerPendingUse.length > 0 && (
-            <button
-              type="button"
-              onClick={() => approvalCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+            <div
               style={{
-                width: '100%',
                 borderRadius: '12px',
                 border: `1px solid ${C.primaryBorder}`,
-                background: 'linear-gradient(110deg, rgba(110,164,187,0.22) 0%, #FFFFFF 78%)',
-                color: C.primary,
-                fontWeight: 800,
-                fontSize: '15px',
-                lineHeight: '22px',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '14px 16px',
+                boxShadow: C.cardShadow,
+                background: '#FFFFFF',
+                overflow: 'hidden',
               }}
             >
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-                <TicketCheck size={16} />
-                Coupon use requests ({partnerPendingUse.length})
-              </span>
-              <span style={{ fontSize: '12px', fontWeight: 700 }}>Tap to review</span>
-            </button>
+              <button
+                type="button"
+                onClick={() => setApprovalExpanded((open) => !open)}
+                aria-expanded={approvalExpanded}
+                style={{
+                  width: '100%',
+                  border: 'none',
+                  background: approvalExpanded
+                    ? 'linear-gradient(110deg, rgba(110,164,187,0.22) 0%, #FFFFFF 78%)'
+                    : 'linear-gradient(110deg, rgba(110,164,187,0.22) 0%, #FFFFFF 78%)',
+                  color: C.primary,
+                  fontWeight: 800,
+                  fontSize: '15px',
+                  lineHeight: '22px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 16px',
+                }}
+              >
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                  <TicketCheck size={16} />
+                  Coupon use requests ({partnerPendingUse.length})
+                </span>
+                <span
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '12px',
+                    fontWeight: 700,
+                  }}
+                >
+                  {approvalExpanded ? 'Hide' : 'Review'}
+                  <ChevronDown
+                    size={16}
+                    style={{
+                      transition: 'transform 0.25s ease',
+                      transform: approvalExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                    }}
+                  />
+                </span>
+              </button>
+
+              <div
+                style={{
+                  maxHeight: approvalExpanded ? `${Math.max(partnerPendingUse.length, 1) * 220}px` : '0px',
+                  opacity: approvalExpanded ? 1 : 0,
+                  overflow: 'hidden',
+                  transition: 'max-height 0.3s ease, opacity 0.25s ease',
+                }}
+              >
+                {pendingApproval && (
+                  <div
+                    style={{
+                      borderTop: `1px solid ${C.primaryBorder}`,
+                      background: 'linear-gradient(130deg, rgba(110,164,187,0.10) 0%, rgba(255,255,255,1) 82%)',
+                      padding: '14px 16px 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: '16px',
+                        fontWeight: 800,
+                        color: C.textPrimary,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                      }}
+                    >
+                      <CheckCircle2 size={18} color={C.primary} />
+                      {partnerUser.displayName} wants to use a coupon
+                    </div>
+                    <div style={{ fontSize: '13px', color: C.textMuted }}>
+                      {pendingApproval.rewardName} ? {formatPts(pendingApproval.rewardCost)} pts
+                    </div>
+                    <input
+                      type="password"
+                      value={approvalCode}
+                      onChange={(e) => setApprovalCode(e.target.value)}
+                      placeholder="Approval code"
+                      style={{
+                        width: '100%',
+                        height: '42px',
+                        borderRadius: '8px',
+                        border: '1px solid rgba(0,0,0,0.12)',
+                        padding: '0 12px',
+                        boxSizing: 'border-box',
+                        background: '#FFFFFF',
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void handleApprove()}
+                      style={{
+                        width: '100%',
+                        height: '42px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: `linear-gradient(135deg, ${C.gold}, ${C.goldDark})`,
+                        color: '#FFF',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      Approve use
+                      <Sparkles size={14} />
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
           )}
 
           {rewards.map((reward) => {
@@ -407,74 +516,6 @@ export function Rewards({
             );
           })}
 
-          {pendingApproval && (
-            <div
-              ref={approvalCardRef}
-              style={{
-                borderRadius: '12px',
-                border: `1px solid ${C.primaryBorder}`,
-                boxShadow: C.cardShadow,
-                background: 'linear-gradient(130deg, rgba(110,164,187,0.16) 0%, rgba(255,255,255,1) 82%)',
-                padding: '14px',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-              }}
-            >
-              <div
-                style={{
-                  fontSize: '16px',
-                  fontWeight: 800,
-                  color: C.textPrimary,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <CheckCircle2 size={18} color={C.primary} />
-                {partnerUser.displayName} wants to use a coupon
-              </div>
-              <div style={{ fontSize: '13px', color: C.textMuted }}>
-                {pendingApproval.rewardName} ? {formatPts(pendingApproval.rewardCost)} pts
-              </div>
-              <input
-                type="password"
-                value={approvalCode}
-                onChange={(e) => setApprovalCode(e.target.value)}
-                placeholder="Approval code"
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  borderRadius: '8px',
-                  border: '1px solid rgba(0,0,0,0.12)',
-                  padding: '0 12px',
-                  boxSizing: 'border-box',
-                  background: '#FFFFFF',
-                }}
-              />
-              <button
-                type="button"
-                onClick={() => void handleApprove()}
-                style={{
-                  width: '100%',
-                  height: '42px',
-                  borderRadius: '8px',
-                  border: 'none',
-                  background: `linear-gradient(135deg, ${C.gold}, ${C.goldDark})`,
-                  color: '#FFF',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                }}
-              >
-                Approve use
-                <Sparkles size={14} />
-              </button>
-            </div>
-          )}
         </div>
       )}
 
@@ -556,7 +597,7 @@ export function Rewards({
                         height: '42px',
                         borderRadius: '8px',
                         border: 'none',
-                        background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
+                        background: `linear-gradient(135deg, ${C.primary}, ${C.primaryDark})`,
                         color: '#FFFFFF',
                         fontSize: '14px',
                         fontWeight: 700,
@@ -735,7 +776,7 @@ export function Rewards({
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <TicketCheck size={18} color={C.green} />
+              <TicketCheck size={18} color={C.red} />
               <div style={{ fontSize: '17px', lineHeight: '24px', fontWeight: 900, color: C.textPrimary }}>
                 Use {confirmUseTicket.rewardName}?
               </div>
@@ -770,7 +811,7 @@ export function Rewards({
                   height: '40px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
+                  background: `linear-gradient(135deg, ${C.red}, ${C.redDark})`,
                   color: '#FFFFFF',
                   fontWeight: 700,
                   cursor: 'pointer',
