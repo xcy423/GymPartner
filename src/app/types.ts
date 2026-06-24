@@ -17,9 +17,9 @@ export interface RewardRequest {
   rewardId: string;
   rewardName: string;
   rewardCost: number;
-  status: 'pending' | 'approved' | 'used';
-  requestedAt?: string;
-  approvedAt?: string;
+  status: 'redeemed' | 'pending_use' | 'used';
+  redeemedAt?: string;
+  usedAt?: string;
   usedAt?: string;
 }
 
