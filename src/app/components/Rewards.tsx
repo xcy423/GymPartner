@@ -388,7 +388,24 @@ export function Rewards({
             </div>
           )}
 
-          {rewards.map((reward) => {
+          {rewards.length === 0 ? (
+            <div
+              style={{
+                borderRadius: '12px',
+                border: '1px solid rgba(0,0,0,0.08)',
+                background: '#FFFFFF',
+                boxShadow: C.cardShadow,
+                padding: '20px',
+                fontSize: '14px',
+                fontWeight: 700,
+                color: C.textMuted,
+                textAlign: 'center',
+              }}
+            >
+              No rewards in catalog yet. Check that rewards_catalog is seeded in Supabase.
+            </div>
+          ) : (
+          rewards.map((reward) => {
             const RewardIcon = reward.icon;
             const userPts = currentUser.points;
             const unlocked = userPts >= reward.cost_points;
@@ -514,7 +531,8 @@ export function Rewards({
                 )}
               </div>
             );
-          })}
+          })
+          )}
 
         </div>
       )}
