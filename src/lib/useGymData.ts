@@ -441,10 +441,9 @@ export function useGymData(userId: string | null) {
       }
 
       try {
-        const { error } = await supabase
-          .from('redemption_requests')
-          .update({ status: 'pending_use' })
-          .eq('id', requestId);
+        const { error } = await supabase.rpc('request_coupon_use', {
+          p_request_id: requestId,
+        });
 
         if (error) throw error;
 
