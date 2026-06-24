@@ -821,9 +821,9 @@ export function Rewards({
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  void onRequestCouponUse(confirmUseTicket.id);
-                  setConfirmUseTicketId(null);
+                onClick={async () => {
+                  const ok = await onRequestCouponUse(confirmUseTicket.id);
+                  if (ok) setConfirmUseTicketId(null);
                 }}
                 style={{
                   height: '40px',

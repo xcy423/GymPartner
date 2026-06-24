@@ -436,7 +436,16 @@ export function useGymData(userId: string | null) {
       if (!userId) return false;
 
       const request = rewardRequests.find((item) => item.id === requestId);
-      if (!request || request.requesterId !== userId || request.status !== 'redeemed') {
+      if (!request) {
+        toast.error('Coupon not found. Please refresh and try again.');
+        return false;
+      }
+      if (request.requesterId !== userId) {
+        toast.error('You can only use your own coupons.');
+        return false;
+      }
+      if (request.status !== 'redeemed') {
+        toast.error(`This coupon is already ${request.status === 'pending_use' ? 'waiting for approval' : 'used'}.`);
         return false;
       }
 
