@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { RewardRequest, UserData } from '../App';
+import type { RewardCatalogItem } from '../../lib/useGymData';
 
 const C = {
   primary: '#6EA4BB',
@@ -38,47 +39,28 @@ const C = {
   textFaint: '#B0B8C8',
 };
 
-type RewardItem = {
-  id: string;
+type RewardDisplay = RewardCatalogItem & {
   icon: LucideIcon;
   iconColor: string;
-  name: string;
-  desc: string;
-  cost: number;
 };
 
-const REWARDS: RewardItem[] = [
-  {
-    id: 'letter',
-    icon: PenLine,
-    iconColor: '#B88E2F',
-    name: 'Handwritten letter',
-    desc: 'A heartfelt letter or cute small surprise gift.',
-    cost: 200,
-  },
-  {
-    id: 'meal',
-    icon: Utensils,
-    iconColor: '#B88E2F',
-    name: 'Home-cooked meal',
-    desc: "Pick your favourite dish and I'll cook it just for you.",
-    cost: 1000,
-  },
-  {
-    id: 'wish',
-    icon: Star,
-    iconColor: '#B88E2F',
-    name: 'Your custom wish',
-    desc: 'Name literally anything you want as your reward.',
-    cost: 2000,
-  },
-];
+function iconForCost(costPoints: number): { icon: LucideIcon; iconColor: string } {
+  if (costPoints >= 2000) return { icon: Star, iconColor: '#B88E2F' };
+  if (costPoints >= 1000) return { icon: Utensils, iconColor: '#B88E2F' };
+  return { icon: PenLine, iconColor: '#B88E2F' };
+}
+
+function toRewardDisplay(item: RewardCatalogItem): RewardDisplay {
+  const { icon, iconColor } = iconForCost(item.cost_points);
+  return { ...item, icon, iconColor };
+}
 
 interface Props {
   currentUser: UserData;
   partnerUser: UserData;
+  catalog: RewardCatalogItem[];
   rewardRequests: RewardRequest[];
-  onRequestReward: (id: string, name: string, cost: number) => void;
+  onRequestReward: (rewardId: number, costPoints: number) => void;
   onApproveReward: (requestId: string, approvalCode: string) => boolean | Promise<boolean>;
   onUseCoupon: (requestId: string) => boolean | Promise<boolean>;
 }
@@ -94,22 +76,27 @@ function formatTicketDate(value?: string): string {
   return date.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
-function rewardIconFor(id: string): LucideIcon {
-  return REWARDS.find((r) => r.id === id)?.icon ?? Gift;
+function rewardIconFor(rewardId: string, catalog: RewardCatalogItem[]): LucideIcon {
+  const item = catalog.find((r) => String(r.id) === rewardId);
+  if (!item) return Gift;
+  return iconForCost(item.cost_points).icon;
 }
 
 export function Rewards({
   currentUser,
   partnerUser,
+  catalog,
   rewardRequests,
   onRequestReward,
   onApproveReward,
   onUseCoupon,
 }: Props) {
   const [view, setView] = useState<'rewards' | 'tickets'>('rewards');
-  const [confirmRewardId, setConfirmRewardId] = useState<string | null>(null);
+  const [confirmRewardId, setConfirmRewardId] = useState<number | null>(null);
   const [approvalCode, setApprovalCode] = useState('');
   const approvalCardRef = useRef<HTMLDivElement | null>(null);
+
+  const rewards = useMemo(() => catalog.map(toRewardDisplay), [catalog]);
 
   const myRequests = rewardRequests.filter((r) => r.requesterId === currentUser.id);
   const partnerPendingRequests = rewardRequests.filter(
@@ -142,7 +129,9 @@ export function Rewards({
     return map;
   }, [myRequests]);
 
-  const confirmReward = confirmRewardId ? REWARDS.find((r) => r.id === confirmRewardId) ?? null : null;
+  const confirmReward = confirmRewardId
+    ? rewards.find((r) => r.id === confirmRewardId) ?? null
+    : null;
 
   const handleApprove = async () => {
     if (!pendingApproval) return;
@@ -290,12 +279,12 @@ export function Rewards({
             <span style={{ fontSize: '12px', fontWeight: 700 }}>Tap to review</span>
           </button>
 
-          {REWARDS.map((reward) => {
+          {rewards.map((reward) => {
             const RewardIcon = reward.icon;
-            const req = requestByRewardId.get(reward.id);
+            const req = requestByRewardId.get(String(reward.id));
             const userPts = currentUser.points;
-            const unlocked = userPts >= reward.cost;
-            const progress = Math.min((userPts / reward.cost) * 100, 100);
+            const unlocked = userPts >= reward.cost_points;
+            const progress = Math.min((userPts / reward.cost_points) * 100, 100);
             const isPending = req?.status === 'pending';
             const isApproved = req?.status === 'approved';
             const isUsed = req?.status === 'used';
@@ -332,13 +321,13 @@ export function Rewards({
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 800, color: C.textPrimary }}>
-                      {reward.name}
+                      {reward.title}
                     </div>
-                    <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted }}>{reward.desc}</div>
+                    <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted }}>{reward.description}</div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: '28px', lineHeight: '32px', fontWeight: 900, color: C.gold }}>
-                      {formatPts(reward.cost)}
+                      {formatPts(reward.cost_points)}
                     </div>
                     <div style={{ fontSize: '11px', lineHeight: '14px', color: C.textMuted }}>pts</div>
                   </div>
@@ -356,7 +345,7 @@ export function Rewards({
                     }}
                   >
                     <span>
-                      {formatPts(userPts)} / {formatPts(reward.cost)} pts
+                      {formatPts(userPts)} / {formatPts(reward.cost_points)} pts
                     </span>
                     <span>{Math.round(progress)}%</span>
                   </div>
@@ -480,7 +469,7 @@ export function Rewards({
                       cursor: 'not-allowed',
                     }}
                   >
-                    Need {formatPts(reward.cost - userPts)} more pts
+                    Need {formatPts(reward.cost_points - userPts)} more pts
                   </button>
                 )}
               </div>
@@ -569,7 +558,7 @@ export function Rewards({
             </div>
           ) : (
             myApprovedTickets.map((ticket) => {
-              const TicketIcon = rewardIconFor(ticket.rewardId);
+              const TicketIcon = rewardIconFor(ticket.rewardId, catalog);
               return (
                 <div
                   key={ticket.id}
@@ -659,7 +648,7 @@ export function Rewards({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Gift size={18} color={C.goldDark} />
               <div style={{ fontSize: '17px', lineHeight: '24px', fontWeight: 900, color: C.textPrimary }}>
-                Redeem {confirmReward.name}?
+                Redeem {confirmReward.title}?
               </div>
             </div>
             <div style={{ fontSize: '13px', lineHeight: '19px', color: C.textMuted }}>
@@ -684,7 +673,7 @@ export function Rewards({
               <button
                 type="button"
                 onClick={() => {
-                  onRequestReward(confirmReward.id, confirmReward.name, confirmReward.cost);
+                  onRequestReward(confirmReward.id, confirmReward.cost_points);
                   setConfirmRewardId(null);
                 }}
                 style={{
