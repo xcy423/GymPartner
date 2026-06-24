@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast, Toaster } from 'sonner';
+import { supabase } from '../lib/supabase';
+import { useGymData } from '../lib/useGymData';
 import { Login } from './components/Login';
 import { Home } from './components/Home';
 import { Rewards } from './components/Rewards';
@@ -9,249 +11,95 @@ import { BottomNav } from './components/BottomNav';
 
 export type TabName = 'home' | 'rewards' | 'calendar' | 'settings';
 
-export interface Session {
-  id: string;
-  userId: string;
-  date: string;
-  checkInTime: string;
-  checkOutTime: string | null;
-  checkInPhoto: string | null;
-  checkOutPhoto: string | null;
-  complete: boolean;
-}
-
-export interface RewardRequest {
-  id: string;
-  requesterId: string;
-  rewardId: string;
-  rewardName: string;
-  rewardEmoji: string;
-  rewardCost: number;
-  status: 'pending' | 'approved';
-  approvedAt?: string;
-}
-
-export interface UserData {
-  username: string;
-  password: string;
-  displayName: string;
-  partner: string;
-  approvalCode: string;
-  points: number;
-  multiplier: number;
-  weekStreak: number;
-  weekMode: 'fixed' | 'rolling';
-}
-
-export interface ActiveSession {
-  checkInTime: string;
-  checkInPhoto: string | null;
-}
-
-const INITIAL_USERS: Record<string, UserData> = {
-  codee: {
-    username: 'codee',
-    password: 'gym123',
-    displayName: 'Codee',
-    partner: 'owen',
-    approvalCode: 'love2026',
-    points: 240,
-    multiplier: 1.4,
-    weekStreak: 2,
-    weekMode: 'fixed',
-  },
-  owen: {
-    username: 'owen',
-    password: 'gym456',
-    displayName: 'Owen',
-    partner: 'codee',
-    approvalCode: 'pact2026',
-    points: 180,
-    multiplier: 1.2,
-    weekStreak: 1,
-    weekMode: 'fixed',
-  },
-};
-
-const DEMO_SESSIONS: Session[] = [
-  // codee - Week 2 (June 8–14): 3 sessions → streak 1, multiplier → 1.2
-  { id: 's1', userId: 'codee', date: '2026-06-09', checkInTime: '09:00', checkOutTime: '10:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's2', userId: 'codee', date: '2026-06-11', checkInTime: '08:30', checkOutTime: '10:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's3', userId: 'codee', date: '2026-06-13', checkInTime: '07:00', checkOutTime: '08:45', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // codee - Week 3 (June 15–21): 3 sessions → streak 2, multiplier → 1.4
-  { id: 's4', userId: 'codee', date: '2026-06-16', checkInTime: '09:00', checkOutTime: '10:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's5', userId: 'codee', date: '2026-06-18', checkInTime: '18:00', checkOutTime: null, checkInPhoto: null, checkOutPhoto: null, complete: false },
-  { id: 's6', userId: 'codee', date: '2026-06-20', checkInTime: '08:00', checkOutTime: '09:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // owen - Week 2 (June 8–14): 3 sessions → streak 1, multiplier → 1.2
-  { id: 's7', userId: 'owen', date: '2026-06-10', checkInTime: '10:00', checkOutTime: '11:30', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's8', userId: 'owen', date: '2026-06-12', checkInTime: '09:00', checkOutTime: '10:15', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  { id: 's9', userId: 'owen', date: '2026-06-14', checkInTime: '08:30', checkOutTime: '10:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-  // owen - Week 3 (June 15–21): only 1 session — streak resets
-  { id: 's10', userId: 'owen', date: '2026-06-17', checkInTime: '07:30', checkOutTime: '09:00', checkInPhoto: null, checkOutPhoto: null, complete: true },
-];
-
-function getMonday(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  const day = d.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  return d;
-}
-
-export function getWeekSessions(sessions: Session[], userId: string, weekMode: 'fixed' | 'rolling'): number {
-  const today = new Date();
-  let weekStart: Date;
-  if (weekMode === 'rolling') {
-    weekStart = new Date(today);
-    weekStart.setDate(weekStart.getDate() - 6);
-    weekStart.setHours(0, 0, 0, 0);
-  } else {
-    weekStart = getMonday(today);
-  }
-  const todayStr = today.toISOString().split('T')[0];
-  const weekStartStr = weekStart.toISOString().split('T')[0];
-  return sessions.filter(
-    (s) => s.userId === userId && s.complete && s.date >= weekStartStr && s.date <= todayStr
-  ).length;
-}
-
-export function getMonthSessions(sessions: Session[], userId: string): number {
-  const today = new Date();
-  const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  return sessions.filter((s) => s.userId === userId && s.complete && s.date.startsWith(monthStr)).length;
-}
-
-export function hasSessionToday(sessions: Session[], userId: string): boolean {
-  const today = new Date().toISOString().split('T')[0];
-  return sessions.some((s) => s.userId === userId && s.date === today);
-}
-
 export default function App() {
-  const [currentUser, setCurrentUser] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabName>('home');
   const [viewMode, setViewMode] = useState<'self' | 'partner'>('self');
-  const [users, setUsers] = useState<Record<string, UserData>>(INITIAL_USERS);
-  const [sessions, setSessions] = useState<Session[]>(DEMO_SESSIONS);
-  const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
-  const [rewardRequests, setRewardRequests] = useState<RewardRequest[]>([]);
-  const [timerMin, setTimerMin] = useState(0);
 
+  const {
+    profile,
+    partnerProfile,
+    sessions,
+    rewardRequests,
+    catalog,
+    checkIn,
+    checkOut,
+    requestReward,
+    approveReward,
+    saveSettings,
+  } = useGymData(currentUserId);
+
+  // Restore session on mount
   useEffect(() => {
-    if (!activeSession) { setTimerMin(0); return; }
-    const update = () => {
-      const elapsed = Math.floor((Date.now() - new Date(activeSession.checkInTime).getTime()) / 60000);
-      setTimerMin(elapsed);
-    };
-    update();
-    const id = setInterval(update, 30000);
-    return () => clearInterval(id);
-  }, [activeSession]);
-
-  const handleLogin = useCallback((username: string, password: string): boolean => {
-    const u = users[username.toLowerCase()];
-    if (!u || u.password !== password) return false;
-    setCurrentUser(u.username);
-    return true;
-  }, [users]);
-
-  const handleLogout = useCallback(() => {
-    setCurrentUser(null);
-    setActiveTab('home');
-    setViewMode('self');
-    setActiveSession(null);
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setCurrentUserId(data.session.user.id);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUserId(session?.user.id ?? null);
+    });
+    return () => subscription.unsubscribe();
   }, []);
 
-  const handleCheckIn = useCallback((photo: string | null) => {
-    if (!currentUser) return;
-    setActiveSession({ checkInTime: new Date().toISOString(), checkInPhoto: photo });
-    toast.success('📸 Checked in! Let\'s go 💪');
-  }, [currentUser]);
-
-  const handleCheckOut = useCallback((photo: string | null) => {
-    if (!currentUser || !activeSession) return;
-    const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const ci = new Date(activeSession.checkInTime);
-    const fmtTime = (d: Date) => `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
-
-    const newSession: Session = {
-      id: `s${Date.now()}`,
-      userId: currentUser,
-      date: todayStr,
-      checkInTime: fmtTime(ci),
-      checkOutTime: fmtTime(now),
-      checkInPhoto: activeSession.checkInPhoto,
-      checkOutPhoto: photo,
-      complete: true,
-    };
-
-    const newSessions = [...sessions, newSession];
-    setSessions(newSessions);
-    setActiveSession(null);
-
-    const user = users[currentUser];
-    const weekCount = getWeekSessions(newSessions, currentUser, user.weekMode);
-    let pts = 0;
-    let msg = '✅ Session complete!';
-
-    if (weekCount === 3) {
-      pts = Math.round(100 * user.multiplier);
-      msg = `🎯 3 sessions this week! +${pts} pts earned!`;
-    } else if (weekCount === 5) {
-      pts = Math.round(150 * user.multiplier);
-      msg = `⭐ 5 sessions this week! Bonus +${pts} pts!`;
-    } else if (weekCount < 3) {
-      msg = `✅ Session done! ${3 - weekCount} more to earn points this week!`;
+  const handleLogin = useCallback(async (username: string, password: string): Promise<boolean> => {
+    const { error, data } = await supabase.auth.signInWithPassword({
+      email: `${username.toLowerCase()}@gympact.app`,
+      password,
+    });
+    if (error) {
+      toast.error('Wrong username or password');
+      return false;
     }
+    setCurrentUserId(data.user.id);
+    return true;
+  }, []);
 
-    if (pts > 0) {
-      setUsers((prev) => ({
-        ...prev,
-        [currentUser]: { ...prev[currentUser], points: prev[currentUser].points + pts },
-      }));
-    }
-    toast.success(msg);
-  }, [currentUser, activeSession, sessions, users]);
+  const handleLogout = useCallback(async () => {
+    await supabase.auth.signOut();
+    setCurrentUserId(null);
+    setActiveTab('home');
+    setViewMode('self');
+  }, []);
 
-  const handleRequestReward = useCallback((rewardId: string, rewardName: string, rewardEmoji: string, rewardCost: number) => {
-    if (!currentUser) return;
-    const exists = rewardRequests.find((r) => r.requesterId === currentUser && r.rewardId === rewardId && r.status === 'pending');
+  const handleCheckIn = useCallback(async (photo: string | null) => {
+    await checkIn(photo);
+    toast.success("📸 Checked in! Let's go 💪");
+  }, [checkIn]);
+
+  const handleCheckOut = useCallback(async (sessionId: string, photo: string | null) => {
+    await checkOut(sessionId, photo);
+    toast.success('✅ Session complete! Points updated.');
+  }, [checkOut]);
+
+  const handleRequestReward = useCallback(async (rewardId: number, costPoints: number) => {
+    const exists = rewardRequests.find(
+      r => r.requester_id === currentUserId && r.reward_id === rewardId && r.status === 'pending'
+    );
     if (exists) { toast.info('Already requested — waiting for approval!'); return; }
-    setRewardRequests((prev) => [
-      ...prev,
-      { id: Date.now().toString(), requesterId: currentUser, rewardId, rewardName, rewardEmoji, rewardCost, status: 'pending' },
-    ]);
-    const partnerName = users[users[currentUser].partner].displayName;
+    await requestReward(rewardId, costPoints);
+    const partnerName = partnerProfile?.display_name ?? 'your partner';
     toast.success(`✨ Reward requested! Waiting for ${partnerName} to approve.`);
-  }, [currentUser, rewardRequests, users]);
+  }, [currentUserId, rewardRequests, requestReward, partnerProfile]);
 
-  const handleApproveReward = useCallback((requestId: string, approvalCode: string): boolean => {
-    if (!currentUser) return false;
-    const req = rewardRequests.find((r) => r.id === requestId);
-    if (!req) return false;
-    if (users[currentUser].approvalCode !== approvalCode) {
+  const handleApproveReward = useCallback(async (requestId: string, approvalCode: string): Promise<boolean> => {
+    const ok = await approveReward(requestId, approvalCode);
+    if (!ok) {
       toast.error('❌ Wrong approval code. Try again.');
       return false;
     }
-    setUsers((prev) => ({
-      ...prev,
-      [req.requesterId]: { ...prev[req.requesterId], points: Math.max(0, prev[req.requesterId].points - req.rewardCost) },
-    }));
-    setRewardRequests((prev) =>
-      prev.map((r) => r.id === requestId ? { ...r, status: 'approved', approvedAt: new Date().toISOString() } : r)
-    );
-    toast.success(`✅ ${req.rewardEmoji} ${req.rewardName} approved and redeemed!`);
+    toast.success('✅ Reward approved and redeemed!');
     return true;
-  }, [currentUser, rewardRequests, users]);
+  }, [approveReward]);
 
-  const handleSaveSettings = useCallback((displayName: string, weekMode: 'fixed' | 'rolling', approvalCode: string) => {
-    if (!currentUser) return;
-    setUsers((prev) => ({ ...prev, [currentUser]: { ...prev[currentUser], displayName, weekMode, approvalCode } }));
+  const handleSaveSettings = useCallback(async (
+    displayName: string,
+    weekMode: 'fixed' | 'rolling',
+    approvalCode: string
+  ) => {
+    await saveSettings(displayName, weekMode, approvalCode);
     toast.success('✅ Settings saved!');
-  }, [currentUser]);
+  }, [saveSettings]);
 
-  if (!currentUser) {
+  if (!currentUserId || !profile) {
     return (
       <div className="min-h-screen" style={{ backgroundColor: '#F8F8FB', fontFamily: "'Inter', sans-serif" }}>
         <Login onLogin={handleLogin} />
@@ -260,35 +108,64 @@ export default function App() {
     );
   }
 
-  const user = users[currentUser];
-  const viewUserId = viewMode === 'partner' ? user.partner : currentUser;
-  const viewUser = users[viewUserId];
-  const weekSessions = getWeekSessions(sessions, viewUserId, viewUser.weekMode);
-  const monthSessions = getMonthSessions(sessions, viewUserId);
-  const todaySession = hasSessionToday(sessions, viewUserId);
+  const viewProfile = viewMode === 'partner' ? partnerProfile : profile;
+  if (!viewProfile || !partnerProfile) return null;
+
+  // Compute derived stats for the viewed user
+  const today = new Date();
+  const weekStart = getWeekStart(viewProfile.weekly_mode);
+  const todayStr = today.toISOString().split('T')[0];
+
+  const weekSessions = sessions.filter(
+    s => s.user_id === viewProfile.id &&
+      s.status === 'complete' &&
+      s.check_in_at >= weekStart
+  ).length;
+
+  const monthStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+  const monthSessions = sessions.filter(
+    s => s.user_id === viewProfile.id &&
+      s.status === 'complete' &&
+      s.check_in_at.startsWith(monthStr)
+  ).length;
+
+  const sessionToday = sessions.some(
+    s => s.user_id === viewProfile.id && s.check_in_at.startsWith(todayStr)
+  );
+
+  const activeSession = sessions.find(
+    s => s.user_id === profile.id && s.status === 'active'
+  ) ?? null;
+
+  const timerMin = activeSession
+    ? Math.floor((Date.now() - new Date(activeSession.check_in_at).getTime()) / 60000)
+    : 0;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: '#FFFFFF', fontFamily: "'Inter', sans-serif" }}>
       <div style={{ maxWidth: '440px', margin: '0 auto', position: 'relative' }}>
         {activeTab === 'home' && (
           <Home
-            currentUser={user}
-            viewUser={viewUser}
+            currentUser={profile}
+            viewUser={viewProfile}
             viewMode={viewMode}
             sessions={sessions}
-            activeSession={activeSession}
+            activeSession={activeSession ? { checkInTime: activeSession.check_in_at, checkInPhoto: activeSession.check_in_url } : null}
             timerMin={timerMin}
             weekSessions={weekSessions}
             monthSessions={monthSessions}
-            sessionToday={todaySession}
+            sessionToday={sessionToday}
             onCheckIn={handleCheckIn}
-            onCheckOut={handleCheckOut}
+            onCheckOut={(photo) => {
+              if (activeSession) handleCheckOut(activeSession.id, photo);
+            }}
           />
         )}
-        {activeTab === 'rewards' && (
+        {activeTab === 'rewards' && partnerProfile && (
           <Rewards
-            currentUser={user}
-            partnerUser={users[user.partner]}
+            currentUser={profile}
+            partnerUser={partnerProfile}
+            catalog={catalog}
             rewardRequests={rewardRequests}
             viewMode={viewMode}
             onRequestReward={handleRequestReward}
@@ -296,11 +173,15 @@ export default function App() {
           />
         )}
         {activeTab === 'calendar' && (
-          <CalendarScreen sessions={sessions} userId={viewUserId} viewUser={viewUser} />
+          <CalendarScreen
+            sessions={sessions}
+            userId={viewProfile.id}
+            viewUser={viewProfile}
+          />
         )}
         {activeTab === 'settings' && (
           <SettingsScreen
-            user={user}
+            user={profile}
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             onSaveSettings={handleSaveSettings}
@@ -312,4 +193,20 @@ export default function App() {
       <Toaster position="top-center" richColors />
     </div>
   );
+}
+
+function getWeekStart(mode: 'fixed' | 'rolling'): string {
+  const today = new Date();
+  if (mode === 'rolling') {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 6);
+    d.setHours(0, 0, 0, 0);
+    return d.toISOString();
+  }
+  const d = new Date(today);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
 }
