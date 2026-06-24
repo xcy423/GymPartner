@@ -28,11 +28,20 @@ interface GymSessionRow {
   duration_mins: number | null;
 }
 
+export interface RewardCatalogItem {
+  id: number;
+  emoji: string;
+  title: string;
+  description: string;
+  cost_points: number;
+  active: boolean;
+}
+
 interface RedemptionRequestRow {
   id: string;
   requester_id: string;
   approver_id: string;
-  reward_id: string;
+  reward_id: number;
   status: string;
   custom_text: string | null;
   points_deducted: number | null;
@@ -43,6 +52,13 @@ interface RedemptionRequestRow {
     title: string;
     cost_points: number;
   } | null;
+}
+
+function supabaseErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object' && 'message' in error) {
+    return String((error as { message: string }).message);
+  }
+  return 'Unknown error';
 }
 
 function formatTime(date: Date): string {
@@ -93,8 +109,8 @@ function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
   return {
     id: row.id,
     requesterId: row.requester_id,
-    rewardId: row.reward_id,
-    rewardName: row.rewards_catalog?.title ?? row.reward_id,
+    rewardId: String(row.reward_id),
+    rewardName: row.rewards_catalog?.title ?? String(row.reward_id),
     rewardEmoji: row.rewards_catalog?.emoji ?? '🎁',
     rewardCost: row.rewards_catalog?.cost_points ?? row.points_deducted ?? 0,
     status,
@@ -125,6 +141,7 @@ export function useGymData(userId: string | null) {
   const [partnerProfile, setPartnerProfile] = useState<UserData | null>(null);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [rewardRequests, setRewardRequests] = useState<RewardRequest[]>([]);
+  const [catalog, setCatalog] = useState<RewardCatalogItem[]>([]);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -134,6 +151,7 @@ export function useGymData(userId: string | null) {
       setPartnerProfile(null);
       setSessions([]);
       setRewardRequests([]);
+      setCatalog([]);
       setActiveSession(null);
       return;
     }
@@ -211,9 +229,18 @@ export function useGymData(userId: string | null) {
 
       if (requestsError) throw requestsError;
       setRewardRequests((requestRows ?? []).map(mapRewardRequest));
+
+      const { data: catalogRows, error: catalogError } = await supabase
+        .from('rewards_catalog')
+        .select('id, emoji, title, description, cost_points, active')
+        .eq('active', true)
+        .order('cost_points', { ascending: true });
+
+      if (catalogError) throw catalogError;
+      setCatalog(catalogRows ?? []);
     } catch (error) {
       console.error('Failed to load gym data', error);
-      toast.error('Failed to load your data. Please try again.');
+      toast.error(`Failed to load your data: ${supabaseErrorMessage(error)}`);
     } finally {
       setLoading(false);
     }
@@ -332,16 +359,22 @@ export function useGymData(userId: string | null) {
   );
 
   const redeemReward = useCallback(
-    async (rewardId: string, rewardName: string, rewardEmoji: string, rewardCost: number) => {
+    async (rewardId: number, costPoints: number) => {
       if (!userId || !profile || !profile.partner) return;
 
-      if (profile.points < rewardCost) {
+      const catalogItem = catalog.find((item) => item.id === rewardId);
+      if (!catalogItem) {
+        toast.error('Reward not found.');
+        return;
+      }
+
+      if (profile.points < costPoints) {
         toast.error('Not enough points to redeem this reward.');
         return;
       }
 
       try {
-        const nextPoints = Math.max(0, profile.points - rewardCost);
+        const nextPoints = Math.max(0, profile.points - costPoints);
 
         const { error: pointsError } = await supabase
           .from('profiles')
@@ -356,19 +389,19 @@ export function useGymData(userId: string | null) {
           reward_id: rewardId,
           status: 'redeemed',
           custom_text: null,
-          points_deducted: rewardCost,
+          points_deducted: costPoints,
         });
 
         if (error) throw error;
 
-        toast.success(`🎟️ ${rewardEmoji} ${rewardName} redeemed! Check your Tickets tab.`);
+        toast.success(`🎟️ ${catalogItem.emoji} ${catalogItem.title} redeemed! Check your Tickets tab.`);
         await loadData();
       } catch (error) {
         console.error('Reward redemption failed', error);
-        toast.error('Could not redeem reward. Please try again.');
+        toast.error(`Could not redeem reward: ${supabaseErrorMessage(error)}`);
       }
     },
-    [userId, profile, loadData],
+    [userId, profile, catalog, loadData],
   );
 
   const approveCouponUse = useCallback(
@@ -378,28 +411,28 @@ export function useGymData(userId: string | null) {
       const request = rewardRequests.find((item) => item.id === requestId);
       if (!request || request.status !== 'pending_use') return false;
 
-      if (profile.approvalCode !== approvalCode) {
-        toast.error('❌ Wrong approval code. Try again.');
-        return false;
-      }
-
       try {
-        const { error: requestError } = await supabase
-          .from('redemption_requests')
-          .update({
-            status: 'used',
-            approved_at: new Date().toISOString(),
-          })
-          .eq('id', requestId);
+        const { error } = await supabase.rpc('approve_coupon_use', {
+          p_request_id: requestId,
+          p_approval_code: approvalCode,
+        });
 
-        if (requestError) throw requestError;
+        if (error) {
+          const message = supabaseErrorMessage(error);
+          if (message.toLowerCase().includes('invalid approval code')) {
+            toast.error('❌ Wrong approval code. Try again.');
+          } else {
+            toast.error(`Approval failed: ${message}`);
+          }
+          return false;
+        }
 
         toast.success(`✅ ${request.rewardEmoji} ${request.rewardName} marked as used!`);
         await loadData();
         return true;
       } catch (error) {
         console.error('Coupon approval failed', error);
-        toast.error('Approval failed. Please try again.');
+        toast.error(`Approval failed: ${supabaseErrorMessage(error)}`);
         return false;
       }
     },
@@ -429,7 +462,7 @@ export function useGymData(userId: string | null) {
         return true;
       } catch (error) {
         console.error('Request coupon use failed', error);
-        toast.error('Could not request coupon use. Please try again.');
+        toast.error(`Could not request coupon use: ${supabaseErrorMessage(error)}`);
         return false;
       }
     },
@@ -467,6 +500,7 @@ export function useGymData(userId: string | null) {
     partnerProfile,
     sessions,
     rewardRequests,
+    catalog,
     activeSession,
     loading,
     checkIn,

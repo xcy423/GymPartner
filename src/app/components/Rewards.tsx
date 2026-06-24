@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { RewardRequest, UserData } from '../App';
+import type { RewardCatalogItem } from '../../lib/useGymData';
 
 const C = {
   primary: '#6EA4BB',
@@ -30,6 +31,7 @@ const C = {
   greenBorder: 'rgba(90,158,110,0.30)',
   warn: '#D4854A',
   warnTint: 'rgba(212,133,74,0.12)',
+  warnBorder: 'rgba(212,133,74,0.30)',
   surface3: '#ECEEF5',
   cardShadow: '0 6px 18px rgba(36, 52, 76, 0.08)',
   textPrimary: '#2A2D35',
@@ -37,47 +39,28 @@ const C = {
   textFaint: '#B0B8C8',
 };
 
-type RewardItem = {
-  id: string;
+type RewardDisplay = RewardCatalogItem & {
   icon: LucideIcon;
   iconColor: string;
-  name: string;
-  desc: string;
-  cost: number;
 };
 
-const REWARDS: RewardItem[] = [
-  {
-    id: 'letter',
-    icon: PenLine,
-    iconColor: '#B88E2F',
-    name: 'Handwritten letter',
-    desc: 'A heartfelt letter or cute small surprise gift.',
-    cost: 200,
-  },
-  {
-    id: 'meal',
-    icon: Utensils,
-    iconColor: '#B88E2F',
-    name: 'Home-cooked meal',
-    desc: "Pick your favourite dish and I'll cook it just for you.",
-    cost: 1000,
-  },
-  {
-    id: 'wish',
-    icon: Star,
-    iconColor: '#B88E2F',
-    name: 'Your custom wish',
-    desc: 'Name literally anything you want as your reward.',
-    cost: 2000,
-  },
-];
+function iconForCost(costPoints: number): { icon: LucideIcon; iconColor: string } {
+  if (costPoints >= 2000) return { icon: Star, iconColor: '#B88E2F' };
+  if (costPoints >= 1000) return { icon: Utensils, iconColor: '#B88E2F' };
+  return { icon: PenLine, iconColor: '#B88E2F' };
+}
+
+function toRewardDisplay(item: RewardCatalogItem): RewardDisplay {
+  const { icon, iconColor } = iconForCost(item.cost_points);
+  return { ...item, icon, iconColor };
+}
 
 interface Props {
   currentUser: UserData;
   partnerUser: UserData;
+  catalog: RewardCatalogItem[];
   rewardRequests: RewardRequest[];
-  onRedeemReward: (id: string, name: string, cost: number) => void;
+  onRedeemReward: (rewardId: number, costPoints: number) => void;
   onApproveCouponUse: (requestId: string, approvalCode: string) => boolean | Promise<boolean>;
   onRequestCouponUse: (requestId: string) => boolean | Promise<boolean>;
 }
@@ -106,23 +89,28 @@ function formatDateTime(value?: string): string {
   });
 }
 
-function rewardIconFor(id: string): LucideIcon {
-  return REWARDS.find((r) => r.id === id)?.icon ?? Gift;
+function rewardIconFor(rewardId: string, catalog: RewardCatalogItem[]): LucideIcon {
+  const item = catalog.find((r) => String(r.id) === rewardId);
+  if (!item) return Gift;
+  return iconForCost(item.cost_points).icon;
 }
 
 export function Rewards({
   currentUser,
   partnerUser,
+  catalog,
   rewardRequests,
   onRedeemReward,
   onApproveCouponUse,
   onRequestCouponUse,
 }: Props) {
   const [view, setView] = useState<'rewards' | 'tickets'>('rewards');
-  const [confirmRewardId, setConfirmRewardId] = useState<string | null>(null);
+  const [confirmRewardId, setConfirmRewardId] = useState<number | null>(null);
   const [confirmUseTicketId, setConfirmUseTicketId] = useState<string | null>(null);
   const [approvalCode, setApprovalCode] = useState('');
   const approvalCardRef = useRef<HTMLDivElement | null>(null);
+
+  const rewards = useMemo(() => catalog.map(toRewardDisplay), [catalog]);
 
   const myTickets = rewardRequests
     .filter((r) => r.requesterId === currentUser.id)
@@ -136,7 +124,7 @@ export function Rewards({
   );
   const pendingApproval = partnerPendingUse[0] ?? null;
 
-  const confirmReward = confirmRewardId ? REWARDS.find((r) => r.id === confirmRewardId) ?? null : null;
+  const confirmReward = confirmRewardId ? rewards.find((r) => r.id === confirmRewardId) ?? null : null;
   const confirmUseTicket = confirmUseTicketId
     ? myTickets.find((t) => t.id === confirmUseTicketId) ?? null
     : null;
@@ -291,11 +279,11 @@ export function Rewards({
             </button>
           )}
 
-          {REWARDS.map((reward) => {
+          {rewards.map((reward) => {
             const RewardIcon = reward.icon;
             const userPts = currentUser.points;
-            const unlocked = userPts >= reward.cost;
-            const progress = Math.min((userPts / reward.cost) * 100, 100);
+            const unlocked = userPts >= reward.cost_points;
+            const progress = Math.min((userPts / reward.cost_points) * 100, 100);
 
             return (
               <div
@@ -329,13 +317,13 @@ export function Rewards({
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '16px', lineHeight: '24px', fontWeight: 800, color: C.textPrimary }}>
-                      {reward.name}
+                      {reward.title}
                     </div>
-                    <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted }}>{reward.desc}</div>
+                    <div style={{ fontSize: '12px', lineHeight: '18px', color: C.textMuted }}>{reward.description}</div>
                   </div>
                   <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: '28px', lineHeight: '32px', fontWeight: 900, color: C.gold }}>
-                      {formatPts(reward.cost)}
+                      {formatPts(reward.cost_points)}
                     </div>
                     <div style={{ fontSize: '11px', lineHeight: '14px', color: C.textMuted }}>pts</div>
                   </div>
@@ -353,7 +341,7 @@ export function Rewards({
                     }}
                   >
                     <span>
-                      {formatPts(userPts)} / {formatPts(reward.cost)} pts
+                      {formatPts(userPts)} / {formatPts(reward.cost_points)} pts
                     </span>
                     <span>{Math.round(progress)}%</span>
                   </div>
@@ -412,7 +400,7 @@ export function Rewards({
                       cursor: 'not-allowed',
                     }}
                   >
-                    Need {formatPts(reward.cost - userPts)} more pts
+                    Need {formatPts(reward.cost_points - userPts)} more pts
                   </button>
                 )}
               </div>
@@ -510,11 +498,10 @@ export function Rewards({
             </div>
           ) : (
             myTickets.map((ticket) => {
-              const TicketIcon = rewardIconFor(ticket.rewardId);
+              const TicketIcon = rewardIconFor(ticket.rewardId, catalog);
               const isRedeemed = ticket.status === 'redeemed';
               const isPendingUse = ticket.status === 'pending_use';
               const isUsed = ticket.status === 'used';
-
               return (
                 <div
                   key={ticket.id}
@@ -669,11 +656,11 @@ export function Rewards({
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Gift size={18} color={C.goldDark} />
               <div style={{ fontSize: '17px', lineHeight: '24px', fontWeight: 900, color: C.textPrimary }}>
-                Redeem {confirmReward.name}?
+                Redeem {confirmReward.title}?
               </div>
             </div>
             <div style={{ fontSize: '13px', lineHeight: '19px', color: C.textMuted }}>
-              {formatPts(confirmReward.cost)} pts will be deducted immediately. Your coupon will appear in the
+              {formatPts(confirmReward.cost_points)} pts will be deducted immediately. Your coupon will appear in the
               Tickets tab, ready to use when you want.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -695,7 +682,7 @@ export function Rewards({
               <button
                 type="button"
                 onClick={() => {
-                  onRedeemReward(confirmReward.id, confirmReward.name, confirmReward.cost);
+                  onRedeemReward(confirmReward.id, confirmReward.cost_points);
                   setConfirmRewardId(null);
                   setView('tickets');
                 }}

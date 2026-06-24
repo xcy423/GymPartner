@@ -26,12 +26,6 @@ export interface RewardRequest {
   usedAt?: string;
 }
 
-const REWARD_EMOJI: Record<string, string> = {
-  letter: '💌',
-  meal: '🍳',
-  wish: '⭐',
-};
-
 export interface UserData {
   id: string;
   username: string;
@@ -60,6 +54,7 @@ export default function App() {
     partnerProfile,
     sessions,
     rewardRequests,
+    catalog,
     activeSession,
     loading,
     checkIn,
@@ -168,10 +163,9 @@ export default function App() {
           <Rewards
             currentUser={profile}
             partnerUser={partnerProfile}
+            catalog={catalog}
             rewardRequests={rewardRequests}
-            onRedeemReward={(id, name, cost) =>
-              redeemReward(id, name, REWARD_EMOJI[id] ?? '🎁', cost)
-            }
+            onRedeemReward={redeemReward}
             onApproveCouponUse={approveCouponUse}
             onRequestCouponUse={requestCouponUse}
           />
