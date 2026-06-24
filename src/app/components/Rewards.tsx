@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -30,7 +30,6 @@ const C = {
   greenBorder: 'rgba(90,158,110,0.30)',
   warn: '#D4854A',
   warnTint: 'rgba(212,133,74,0.12)',
-  warnBorder: 'rgba(212,133,74,0.35)',
   surface3: '#ECEEF5',
   cardShadow: '0 6px 18px rgba(36, 52, 76, 0.08)',
   textPrimary: '#2A2D35',
@@ -78,20 +77,33 @@ interface Props {
   currentUser: UserData;
   partnerUser: UserData;
   rewardRequests: RewardRequest[];
-  onRequestReward: (id: string, name: string, cost: number) => void;
-  onApproveReward: (requestId: string, approvalCode: string) => boolean | Promise<boolean>;
-  onUseCoupon: (requestId: string) => boolean | Promise<boolean>;
+  onRedeemReward: (id: string, name: string, cost: number) => void;
+  onApproveCouponUse: (requestId: string, approvalCode: string) => boolean | Promise<boolean>;
+  onRequestCouponUse: (requestId: string) => boolean | Promise<boolean>;
 }
 
 function formatPts(value: number): string {
   return value.toLocaleString();
 }
 
-function formatTicketDate(value?: string): string {
+function formatDate(value?: string): string {
+  if (!value) return 'Unknown date';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Unknown date';
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function formatDateTime(value?: string): string {
   if (!value) return 'Unknown time';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'Unknown time';
-  return date.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function rewardIconFor(id: string): LucideIcon {
@@ -102,51 +114,36 @@ export function Rewards({
   currentUser,
   partnerUser,
   rewardRequests,
-  onRequestReward,
-  onApproveReward,
-  onUseCoupon,
+  onRedeemReward,
+  onApproveCouponUse,
+  onRequestCouponUse,
 }: Props) {
   const [view, setView] = useState<'rewards' | 'tickets'>('rewards');
   const [confirmRewardId, setConfirmRewardId] = useState<string | null>(null);
+  const [confirmUseTicketId, setConfirmUseTicketId] = useState<string | null>(null);
   const [approvalCode, setApprovalCode] = useState('');
   const approvalCardRef = useRef<HTMLDivElement | null>(null);
 
-  const myRequests = rewardRequests.filter((r) => r.requesterId === currentUser.id);
-  const partnerPendingRequests = rewardRequests.filter(
-    (r) => r.requesterId === partnerUser.id && r.status === 'pending',
-  );
-  const pendingApproval = partnerPendingRequests[0] ?? null;
-
-  const myApprovedTickets = myRequests
-    .filter((r) => r.status === 'approved' || r.status === 'used')
+  const myTickets = rewardRequests
+    .filter((r) => r.requesterId === currentUser.id)
     .slice()
-    .sort(
-      (a, b) =>
-        new Date(b.approvedAt ?? 0).getTime() - new Date(a.approvedAt ?? 0).getTime(),
-    );
+    .sort((a, b) => new Date(b.redeemedAt ?? 0).getTime() - new Date(a.redeemedAt ?? 0).getTime());
 
-  const requestByRewardId = useMemo(() => {
-    const map = new Map<string, RewardRequest>();
-    for (const req of myRequests) {
-      const existing = map.get(req.rewardId);
-      if (!existing) {
-        map.set(req.rewardId, req);
-        continue;
-      }
-      if (existing.status === 'used' && req.status !== 'used') {
-        map.set(req.rewardId, req);
-      } else if (existing.status === 'approved' && req.status === 'pending') {
-        map.set(req.rewardId, req);
-      }
-    }
-    return map;
-  }, [myRequests]);
+  const unusedTicketCount = myTickets.filter((t) => t.status === 'redeemed').length;
+
+  const partnerPendingUse = rewardRequests.filter(
+    (r) => r.requesterId === partnerUser.id && r.status === 'pending_use',
+  );
+  const pendingApproval = partnerPendingUse[0] ?? null;
 
   const confirmReward = confirmRewardId ? REWARDS.find((r) => r.id === confirmRewardId) ?? null : null;
+  const confirmUseTicket = confirmUseTicketId
+    ? myTickets.find((t) => t.id === confirmUseTicketId) ?? null
+    : null;
 
   const handleApprove = async () => {
     if (!pendingApproval) return;
-    const ok = await onApproveReward(pendingApproval.id, approvalCode);
+    const ok = await onApproveCouponUse(pendingApproval.id, approvalCode);
     if (ok) setApprovalCode('');
   };
 
@@ -245,14 +242,16 @@ export function Rewards({
             }}
             aria-label="See all tickets"
           >
-            <span style={{ fontSize: '12px', lineHeight: '24px', fontWeight: 700, color: C.primary }}>All</span>
+            <span style={{ fontSize: '12px', lineHeight: '24px', fontWeight: 700, color: C.primary }}>
+              All{unusedTicketCount > 0 ? ` (${unusedTicketCount})` : ''}
+            </span>
             <Filter size={15} color={C.primary} />
           </button>
         )}
       </div>
       {view === 'rewards' && (
         <div style={{ marginTop: '4px', fontSize: '13px', lineHeight: '19.5px', color: C.textMuted }}>
-          Earn points by hitting your weekly gym goals.
+          Redeem instantly ? use your coupon when you&apos;re ready.
         </div>
       )}
     </div>
@@ -264,41 +263,39 @@ export function Rewards({
 
       {view === 'rewards' && (
         <div style={{ paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <button
-            type="button"
-            onClick={() => approvalCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            style={{
-              width: '100%',
-              borderRadius: '12px',
-              border: `1px solid ${C.primaryBorder}`,
-              background: 'linear-gradient(110deg, rgba(110,164,187,0.22) 0%, #FFFFFF 78%)',
-              color: C.primary,
-              fontWeight: 800,
-              fontSize: '15px',
-              lineHeight: '22px',
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '14px 16px',
-            }}
-          >
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
-              <TicketCheck size={16} />
-              Reward Pending Requests ({partnerPendingRequests.length})
-            </span>
-            <span style={{ fontSize: '12px', fontWeight: 700 }}>Tap to review</span>
-          </button>
+          {partnerPendingUse.length > 0 && (
+            <button
+              type="button"
+              onClick={() => approvalCardRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              style={{
+                width: '100%',
+                borderRadius: '12px',
+                border: `1px solid ${C.primaryBorder}`,
+                background: 'linear-gradient(110deg, rgba(110,164,187,0.22) 0%, #FFFFFF 78%)',
+                color: C.primary,
+                fontWeight: 800,
+                fontSize: '15px',
+                lineHeight: '22px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '14px 16px',
+              }}
+            >
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+                <TicketCheck size={16} />
+                Coupon use requests ({partnerPendingUse.length})
+              </span>
+              <span style={{ fontSize: '12px', fontWeight: 700 }}>Tap to review</span>
+            </button>
+          )}
 
           {REWARDS.map((reward) => {
             const RewardIcon = reward.icon;
-            const req = requestByRewardId.get(reward.id);
             const userPts = currentUser.points;
             const unlocked = userPts >= reward.cost;
             const progress = Math.min((userPts / reward.cost) * 100, 100);
-            const isPending = req?.status === 'pending';
-            const isApproved = req?.status === 'approved';
-            const isUsed = req?.status === 'used';
 
             return (
               <div
@@ -374,72 +371,7 @@ export function Rewards({
                   </div>
                 </div>
 
-                {isUsed ? (
-                  <div
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      height: '42px',
-                      borderRadius: '8px',
-                      border: `1px solid ${C.greenBorder}`,
-                      background: C.greenTint,
-                      color: C.green,
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <CheckCircle2 size={14} />
-                    Coupon used
-                  </div>
-                ) : isApproved && req ? (
-                  <button
-                    type="button"
-                    onClick={() => void onUseCoupon(req.id)}
-                    style={{
-                      width: '100%',
-                      height: '42px',
-                      borderRadius: '8px',
-                      border: 'none',
-                      background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
-                      color: '#FFFFFF',
-                      fontSize: '14px',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <TicketCheck size={16} />
-                    Use Coupon
-                  </button>
-                ) : isPending ? (
-                  <div
-                    style={{
-                      width: '100%',
-                      boxSizing: 'border-box',
-                      height: '42px',
-                      borderRadius: '999px',
-                      border: `1px solid ${C.goldBorder}`,
-                      background: C.goldTint,
-                      color: C.goldDark,
-                      fontSize: '13px',
-                      fontWeight: 700,
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '6px',
-                    }}
-                  >
-                    <Clock3 size={14} />
-                    Awaiting {partnerUser.displayName}&apos;s approval?
-                  </div>
-                ) : unlocked ? (
+                {unlocked ? (
                   <button
                     type="button"
                     onClick={() => setConfirmRewardId(reward.id)}
@@ -460,7 +392,7 @@ export function Rewards({
                       gap: '6px',
                     }}
                   >
-                    Request this reward
+                    Redeem
                     <Sparkles size={14} />
                   </button>
                 ) : (
@@ -501,12 +433,21 @@ export function Rewards({
                 gap: '8px',
               }}
             >
-              <div style={{ fontSize: '16px', fontWeight: 800, color: C.textPrimary, display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+              <div
+                style={{
+                  fontSize: '16px',
+                  fontWeight: 800,
+                  color: C.textPrimary,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
                 <CheckCircle2 size={18} color={C.primary} />
-                {partnerUser.displayName} needs your approval
+                {partnerUser.displayName} wants to use a coupon
               </div>
               <div style={{ fontSize: '13px', color: C.textMuted }}>
-                {pendingApproval.rewardName} · {formatPts(pendingApproval.rewardCost)} pts
+                {pendingApproval.rewardName} ? {formatPts(pendingApproval.rewardCost)} pts
               </div>
               <input
                 type="password"
@@ -541,7 +482,7 @@ export function Rewards({
                   gap: '6px',
                 }}
               >
-                Approve & redeem
+                Approve use
                 <Sparkles size={14} />
               </button>
             </div>
@@ -551,7 +492,7 @@ export function Rewards({
 
       {view === 'tickets' && (
         <div style={{ paddingTop: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {myApprovedTickets.length === 0 ? (
+          {myTickets.length === 0 ? (
             <div
               style={{
                 borderRadius: '12px',
@@ -565,11 +506,15 @@ export function Rewards({
                 textAlign: 'center',
               }}
             >
-              No tickets yet ? keep earning!
+              No tickets yet ? redeem a reward to get one!
             </div>
           ) : (
-            myApprovedTickets.map((ticket) => {
+            myTickets.map((ticket) => {
               const TicketIcon = rewardIconFor(ticket.rewardId);
+              const isRedeemed = ticket.status === 'redeemed';
+              const isPendingUse = ticket.status === 'pending_use';
+              const isUsed = ticket.status === 'used';
+
               return (
                 <div
                   key={ticket.id}
@@ -580,44 +525,109 @@ export function Rewards({
                     boxShadow: C.cardShadow,
                     padding: '14px',
                     display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
+                    flexDirection: 'column',
                     gap: '10px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
-                    <div
-                      style={{
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '10px',
-                        border: `1px solid ${C.goldBorder}`,
-                        background: C.goldTint,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                      }}
-                    >
-                      <TicketIcon size={18} color={C.goldDark} />
-                    </div>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 800, color: C.textPrimary }}>
-                        {ticket.rewardName}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0 }}>
+                      <div
+                        style={{
+                          width: '40px',
+                          height: '40px',
+                          borderRadius: '10px',
+                          border: `1px solid ${C.goldBorder}`,
+                          background: C.goldTint,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                        }}
+                      >
+                        <TicketIcon size={18} color={C.goldDark} />
                       </div>
-                      <div style={{ fontSize: '12px', lineHeight: '16px', color: C.textMuted }}>
-                        {formatTicketDate(ticket.approvedAt)}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: '14px', lineHeight: '20px', fontWeight: 800, color: C.textPrimary }}>
+                          {ticket.rewardName}
+                        </div>
+                        <div style={{ fontSize: '12px', lineHeight: '16px', color: C.textMuted }}>
+                          Redeemed {formatDateTime(ticket.redeemedAt)}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
                     <div style={{ fontSize: '13px', fontWeight: 800, color: C.goldDark, whiteSpace: 'nowrap' }}>
                       -{formatPts(ticket.rewardCost)} pts
                     </div>
-                    <div style={{ fontSize: '11px', color: ticket.status === 'used' ? C.textMuted : C.green, fontWeight: 700 }}>
-                      {ticket.status === 'used' ? 'Used' : 'Active'}
-                    </div>
                   </div>
+
+                  {isRedeemed && (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmUseTicketId(ticket.id)}
+                      style={{
+                        width: '100%',
+                        height: '42px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
+                        color: '#FFFFFF',
+                        fontSize: '14px',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <TicketCheck size={16} />
+                      Use it
+                    </button>
+                  )}
+
+                  {isPendingUse && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '999px',
+                        background: C.warnTint,
+                        border: `1px solid ${C.warnBorder}`,
+                        color: C.warn,
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Clock3 size={14} />
+                      Awaiting {partnerUser.displayName}&apos;s approval
+                    </div>
+                  )}
+
+                  {isUsed && (
+                    <div
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: '8px',
+                        background: C.greenTint,
+                        border: `1px solid ${C.greenBorder}`,
+                        color: C.green,
+                        fontSize: '13px',
+                        fontWeight: 700,
+                        textAlign: 'center',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <CheckCircle2 size={14} />
+                      Used on {formatDate(ticket.usedAt)}
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -663,7 +673,8 @@ export function Rewards({
               </div>
             </div>
             <div style={{ fontSize: '13px', lineHeight: '19px', color: C.textMuted }}>
-              This will send a request to {partnerUser.displayName} for approval.
+              {formatPts(confirmReward.cost)} pts will be deducted immediately. Your coupon will appear in the
+              Tickets tab, ready to use when you want.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <button
@@ -684,8 +695,9 @@ export function Rewards({
               <button
                 type="button"
                 onClick={() => {
-                  onRequestReward(confirmReward.id, confirmReward.name, confirmReward.cost);
+                  onRedeemReward(confirmReward.id, confirmReward.name, confirmReward.cost);
                   setConfirmRewardId(null);
+                  setView('tickets');
                 }}
                 style={{
                   height: '40px',
@@ -697,7 +709,87 @@ export function Rewards({
                   cursor: 'pointer',
                 }}
               >
-                Yes, request it
+                Yes, redeem
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {confirmUseTicket && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 100,
+            background: 'rgba(24, 28, 36, 0.45)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setConfirmUseTicketId(null)}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '360px',
+              borderRadius: '12px',
+              border: '1px solid rgba(0,0,0,0.08)',
+              background: '#FFFFFF',
+              boxShadow: '0 18px 42px rgba(0,0,0,0.20)',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <TicketCheck size={18} color={C.green} />
+              <div style={{ fontSize: '17px', lineHeight: '24px', fontWeight: 900, color: C.textPrimary }}>
+                Use {confirmUseTicket.rewardName}?
+              </div>
+            </div>
+            <div style={{ fontSize: '13px', lineHeight: '19px', color: C.textMuted }}>
+              This will ask {partnerUser.displayName} to enter their approval code. Once approved, the coupon will
+              be marked as used.
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setConfirmUseTicketId(null)}
+                style={{
+                  height: '40px',
+                  borderRadius: '8px',
+                  border: '1px solid rgba(0,0,0,0.12)',
+                  background: '#FFFFFF',
+                  color: C.textPrimary,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  void onRequestCouponUse(confirmUseTicket.id);
+                  setConfirmUseTicketId(null);
+                }}
+                style={{
+                  height: '40px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: `linear-gradient(135deg, ${C.green}, ${C.greenDark})`,
+                  color: '#FFFFFF',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                Use it
               </button>
             </div>
           </div>

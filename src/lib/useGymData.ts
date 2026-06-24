@@ -33,10 +33,11 @@ interface RedemptionRequestRow {
   requester_id: string;
   approver_id: string;
   reward_id: string;
-  status: 'pending' | 'approved' | 'used';
+  status: string;
   custom_text: string | null;
   points_deducted: number | null;
   approved_at: string | null;
+  created_at: string | null;
   rewards_catalog?: {
     emoji: string;
     title: string;
@@ -80,6 +81,15 @@ function mapSession(row: GymSessionRow): Session {
 }
 
 function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
+  const status =
+    row.status === 'redeemed' || row.status === 'pending_use' || row.status === 'used'
+      ? row.status
+      : row.status === 'approved'
+        ? 'redeemed'
+        : row.status === 'pending'
+          ? 'pending_use'
+          : 'redeemed';
+
   return {
     id: row.id,
     requesterId: row.requester_id,
@@ -87,8 +97,9 @@ function mapRewardRequest(row: RedemptionRequestRow): RewardRequest {
     rewardName: row.rewards_catalog?.title ?? row.reward_id,
     rewardEmoji: row.rewards_catalog?.emoji ?? '🎁',
     rewardCost: row.rewards_catalog?.cost_points ?? row.points_deducted ?? 0,
-    status: row.status,
-    approvedAt: row.approved_at ?? undefined,
+    status,
+    redeemedAt: row.created_at ?? undefined,
+    usedAt: status === 'used' ? (row.approved_at ?? undefined) : undefined,
   };
 }
 
@@ -192,6 +203,7 @@ export function useGymData(userId: string | null) {
           custom_text,
           points_deducted,
           approved_at,
+          created_at,
           rewards_catalog (emoji, title, cost_points)
         `)
         .or(`requester_id.eq.${userId},approver_id.eq.${userId}`)
@@ -319,51 +331,52 @@ export function useGymData(userId: string | null) {
     [userId, profile, activeSession, sessions, loadData],
   );
 
-  const requestReward = useCallback(
+  const redeemReward = useCallback(
     async (rewardId: string, rewardName: string, rewardEmoji: string, rewardCost: number) => {
       if (!userId || !profile || !profile.partner) return;
 
-      const exists = rewardRequests.find(
-        (request) =>
-          request.requesterId === userId &&
-          request.rewardId === rewardId &&
-          request.status === 'pending',
-      );
-
-      if (exists) {
-        toast.info('Already requested — waiting for approval!');
+      if (profile.points < rewardCost) {
+        toast.error('Not enough points to redeem this reward.');
         return;
       }
 
       try {
+        const nextPoints = Math.max(0, profile.points - rewardCost);
+
+        const { error: pointsError } = await supabase
+          .from('profiles')
+          .update({ points: nextPoints })
+          .eq('id', userId);
+
+        if (pointsError) throw pointsError;
+
         const { error } = await supabase.from('redemption_requests').insert({
           requester_id: userId,
           approver_id: profile.partner,
           reward_id: rewardId,
-          status: 'pending',
+          status: 'redeemed',
           custom_text: null,
           points_deducted: rewardCost,
         });
 
         if (error) throw error;
 
-        const partnerName = partnerProfile?.displayName ?? 'your partner';
-        toast.success(`✨ Reward requested! Waiting for ${partnerName} to approve.`);
+        toast.success(`🎟️ ${rewardEmoji} ${rewardName} redeemed! Check your Tickets tab.`);
         await loadData();
       } catch (error) {
-        console.error('Reward request failed', error);
-        toast.error('Could not request reward. Please try again.');
+        console.error('Reward redemption failed', error);
+        toast.error('Could not redeem reward. Please try again.');
       }
     },
-    [userId, profile, partnerProfile, rewardRequests, loadData],
+    [userId, profile, loadData],
   );
 
-  const approveReward = useCallback(
+  const approveCouponUse = useCallback(
     async (requestId: string, approvalCode: string): Promise<boolean> => {
       if (!userId || !profile) return false;
 
       const request = rewardRequests.find((item) => item.id === requestId);
-      if (!request) return false;
+      if (!request || request.status !== 'pending_use') return false;
 
       if (profile.approvalCode !== approvalCode) {
         toast.error('❌ Wrong approval code. Try again.');
@@ -371,68 +384,56 @@ export function useGymData(userId: string | null) {
       }
 
       try {
-        const requesterProfile = request.requesterId === userId ? profile : partnerProfile;
-        if (!requesterProfile) return false;
-
-        const nextPoints = Math.max(0, requesterProfile.points - request.rewardCost);
-
-        const { error: requesterError } = await supabase
-          .from('profiles')
-          .update({ points: nextPoints })
-          .eq('id', request.requesterId);
-
-        if (requesterError) throw requesterError;
-
         const { error: requestError } = await supabase
           .from('redemption_requests')
           .update({
-            status: 'approved',
+            status: 'used',
             approved_at: new Date().toISOString(),
-            points_deducted: request.rewardCost,
           })
           .eq('id', requestId);
 
         if (requestError) throw requestError;
 
-        toast.success(`✅ ${request.rewardEmoji} ${request.rewardName} approved and redeemed!`);
+        toast.success(`✅ ${request.rewardEmoji} ${request.rewardName} marked as used!`);
         await loadData();
         return true;
       } catch (error) {
-        console.error('Reward approval failed', error);
+        console.error('Coupon approval failed', error);
         toast.error('Approval failed. Please try again.');
         return false;
       }
     },
-    [userId, profile, partnerProfile, rewardRequests, loadData],
+    [userId, profile, rewardRequests, loadData],
   );
 
-  const useCoupon = useCallback(
+  const requestCouponUse = useCallback(
     async (requestId: string): Promise<boolean> => {
       if (!userId) return false;
 
       const request = rewardRequests.find((item) => item.id === requestId);
-      if (!request || request.requesterId !== userId || request.status !== 'approved') {
+      if (!request || request.requesterId !== userId || request.status !== 'redeemed') {
         return false;
       }
 
       try {
         const { error } = await supabase
           .from('redemption_requests')
-          .update({ status: 'used' })
+          .update({ status: 'pending_use' })
           .eq('id', requestId);
 
         if (error) throw error;
 
-        toast.success('Coupon marked as used!');
+        const partnerName = partnerProfile?.displayName ?? 'your partner';
+        toast.success(`Waiting for ${partnerName} to approve your coupon use.`);
         await loadData();
         return true;
       } catch (error) {
-        console.error('Use coupon failed', error);
-        toast.error('Could not mark coupon as used.');
+        console.error('Request coupon use failed', error);
+        toast.error('Could not request coupon use. Please try again.');
         return false;
       }
     },
-    [userId, rewardRequests, loadData],
+    [userId, partnerProfile, rewardRequests, loadData],
   );
 
   const saveSettings = useCallback(
@@ -470,9 +471,9 @@ export function useGymData(userId: string | null) {
     loading,
     checkIn,
     checkOut,
-    requestReward,
-    approveReward,
-    useCoupon,
+    redeemReward,
+    approveCouponUse,
+    requestCouponUse,
     saveSettings,
     refresh: loadData,
   };

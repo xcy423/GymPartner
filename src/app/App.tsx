@@ -21,8 +21,9 @@ export interface RewardRequest {
   rewardName: string;
   rewardEmoji: string;
   rewardCost: number;
-  status: 'pending' | 'approved' | 'used';
-  approvedAt?: string;
+  status: 'redeemed' | 'pending_use' | 'used';
+  redeemedAt?: string;
+  usedAt?: string;
 }
 
 const REWARD_EMOJI: Record<string, string> = {
@@ -63,9 +64,9 @@ export default function App() {
     loading,
     checkIn,
     checkOut,
-    requestReward,
-    approveReward,
-    useCoupon,
+    redeemReward,
+    approveCouponUse,
+    requestCouponUse,
     saveSettings,
   } = useGymData(currentUser);
 
@@ -168,11 +169,11 @@ export default function App() {
             currentUser={profile}
             partnerUser={partnerProfile}
             rewardRequests={rewardRequests}
-            onRequestReward={(id, name, cost) =>
-              requestReward(id, name, REWARD_EMOJI[id] ?? '🎁', cost)
+            onRedeemReward={(id, name, cost) =>
+              redeemReward(id, name, REWARD_EMOJI[id] ?? '🎁', cost)
             }
-            onApproveReward={approveReward}
-            onUseCoupon={useCoupon}
+            onApproveCouponUse={approveCouponUse}
+            onRequestCouponUse={requestCouponUse}
           />
         )}
         {activeTab === 'calendar' && (
